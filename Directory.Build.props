@@ -20,8 +20,9 @@
     <Deterministic>True</Deterministic>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <WarningsAsErrors />
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
 
     <!-- Packaging properties -->
     <PackageTags>date;time;timezone;calendar;nodatime</PackageTags>
