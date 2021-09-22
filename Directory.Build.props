@@ -13,15 +13,15 @@
     <RepoRoot>$([System.IO.Path]::GetDirectoryName('$(MSBuildThisFileDirectory)'))</RepoRoot>
 
     <!-- Build properties -->
-    <AssemblyOriginatorKeyFile>$(RepoRoot)/NodaTime Release.snk</AssemblyOriginatorKeyFile>
     <SignAssembly>true</SignAssembly>
     <GenerateNeutralResourcesLanguageAttribute>false</GenerateNeutralResourcesLanguageAttribute>
     <CheckForOverflowUnderflow>True</CheckForOverflowUnderflow>
     <Deterministic>True</Deterministic>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <WarningsAsErrors />
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
 
     <!-- Packaging properties -->
     <PackageTags>date;time;timezone;calendar;nodatime</PackageTags>
