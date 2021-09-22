@@ -7,6 +7,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using NodaTime.TimeZones;
 
 namespace NodaTime.Testing.TimeZones
@@ -16,48 +17,44 @@ namespace NodaTime.Testing.TimeZones
     /// </summary>
     public sealed class MultiTransitionDateTimeZone : DateTimeZone
     {
-        /// <summary>
-        /// Gets the zone intervals within this time zone, in chronological order, spanning the whole time line.
-        /// </summary>
-        /// <value>The zone intervals within this time zone, in chronological order, spanning the whole time line.</value>
-        public ReadOnlyCollection<ZoneInterval> Intervals { get; }
+        private readonly ReadOnlyCollection<ZoneInterval> intervals;
+        private readonly ReadOnlyCollection<Instant> transitions;
 
         /// <summary>
-        /// Gets the transition points between intervals.
+        /// Zone intervals within this time zone, in chronological order, spanning the whole time line.
         /// </summary>
-        /// <value>The transition points between intervals.</value>
-        public ReadOnlyCollection<Instant> Transitions { get; }
+        public ReadOnlyCollection<ZoneInterval> Intervals { get { return intervals; } }
+
+        /// <summary>
+        /// Transition points between intervals.
+        /// </summary>
+        public ReadOnlyCollection<Instant> Transitions { get { return transitions; } }
 
         private MultiTransitionDateTimeZone(string id, IList<ZoneInterval> intervals)
             : base(id, intervals.Count == 1, intervals.Min(x => x.WallOffset), intervals.Max(x => x.WallOffset))
         {
-            Intervals = new ReadOnlyCollection<ZoneInterval>(intervals.ToList());
-            Transitions = new ReadOnlyCollection<Instant>(intervals.Skip(1).Select(x => x.Start).ToList());
+            this.intervals = new ReadOnlyCollection<ZoneInterval>(intervals.ToList());
+            transitions = new ReadOnlyCollection<Instant>(intervals.Skip(1).Select(x => x.Start).ToList());
         }
 
-        /// <summary>
-        /// Gets the zone interval for the given instant; the range of time around the instant in which the same Offset
-        /// applies (with the same split between standard time and daylight saving time, and with the same offset).
-        /// </summary>
-        /// <remarks>
-        /// This will always return a valid zone interval, as time zones cover the whole of time.
-        /// </remarks>
-        /// <param name="instant">The <see cref="NodaTime.Instant" /> to query.</param>
-        /// <returns>The defined <see cref="NodaTime.TimeZones.ZoneInterval" />.</returns>
+        /// <inheritdoc />
         public override ZoneInterval GetZoneInterval(Instant instant)
         {
+            // TODO: We've got this binary search in at least three places now.
+            // (PrecalculatedDateTimeZone, BclDateTimeZone, and here.) Maybe we should
+            // have a utility method somewhere...
             int lower = 0; // Inclusive
-            int upper = Intervals.Count; // Exclusive
+            int upper = intervals.Count; // Exclusive
 
             while (lower < upper)
             {
                 int current = (lower + upper) / 2;
-                var candidate = Intervals[current];
-                if (candidate.HasStart && candidate.Start > instant)
+                var candidate = intervals[current];
+                if (candidate.Start > instant)
                 {
                     upper = current;
                 }
-                else if (candidate.HasEnd && candidate.End <= instant)
+                else if (candidate.End <= instant)
                 {
                     lower = current + 1;
                 }
@@ -67,30 +64,38 @@ namespace NodaTime.Testing.TimeZones
                 }
             }
             // Note: this would indicate a bug. The time zone is meant to cover the whole of time.
-            throw new InvalidOperationException($"Instant {instant} did not exist in time zone {Id}");
+            throw new InvalidOperationException(string.Format("Instant {0} did not exist in time zone {1}", instant, Id));
         }
 
-// This isn't really a collection type; it only implements IEnumerable to enable collection initializers.
-#pragma warning disable CA1010 // Implement IEnumerable<T>
-#pragma warning disable CA1710 // Rename class to end in "Collection"
+        /// <inheritdoc />
+        [Obsolete("General DateTimeZone equality is not supported in 2.0")]
+        protected override bool EqualsImpl(DateTimeZone zone)
+        {
+            // Just use reference equality...
+            return ReferenceEquals(this, zone);
+        }
+
+        /// <inheritdoc />
+        public override int GetHashCode()
+        {
+            return RuntimeHelpers.GetHashCode(this);
+        }
+
         /// <summary>
         /// Builder to create instances of <see cref="MultiTransitionDateTimeZone"/>. Each builder
         /// can only be built once.
         /// </summary>
         public sealed class Builder : IEnumerable
-#pragma warning restore CA1710
-#pragma warning restore CA1010
         {
             private readonly List<ZoneInterval> intervals = new List<ZoneInterval>();
             private Offset currentStandardOffset;
             private Offset currentSavings;
             private string currentName;
-            private bool built;
+            private bool built = false;
 
             /// <summary>
-            /// Gets the ID of the time zone which will be built.
+            /// ID of the time zone which will be built.
             /// </summary>
-            /// <value>The ID of the time zone which will be built.</value>
             public string Id { get; set; }
 
             /// <summary>
@@ -98,7 +103,7 @@ namespace NodaTime.Testing.TimeZones
             /// and an initial name of "First".
             /// </summary>
             public Builder() : this(0, 0)
-            {
+            {                
             }
 
             /// <summary>
@@ -143,8 +148,10 @@ namespace NodaTime.Testing.TimeZones
             /// </summary>
             /// <param name="transition">Instant at which the zone changes.</param>
             /// <param name="newStandardOffsetHours">The new standard offset, in hours.</param>
-            public void Add(Instant transition, int newStandardOffsetHours) =>
+            public void Add(Instant transition, int newStandardOffsetHours)
+            {
                 Add(transition, newStandardOffsetHours, 0);
+            }
 
             /// <summary>
             /// Adds a transition at the given instant, to the specified new standard offset,
@@ -153,8 +160,10 @@ namespace NodaTime.Testing.TimeZones
             /// <param name="transition">Instant at which the zone changes.</param>
             /// <param name="newStandardOffsetHours">The new standard offset, in hours.</param>
             /// <param name="newSavingOffsetHours">The new daylight saving offset, in hours.</param>
-            public void Add(Instant transition, int newStandardOffsetHours, int newSavingOffsetHours) =>
-                Add(transition, newStandardOffsetHours, newSavingOffsetHours, $"Interval from {transition}");
+            public void Add(Instant transition, int newStandardOffsetHours, int newSavingOffsetHours)
+            {
+                Add(transition, newStandardOffsetHours, newSavingOffsetHours, "Interval from " + transition);
+            }
 
             /// <summary>
             /// Adds a transition at the given instant, to the specified new standard offset,
@@ -167,7 +176,7 @@ namespace NodaTime.Testing.TimeZones
             public void Add(Instant transition, int newStandardOffsetHours, int newSavingOffsetHours, string newName)
             {
                 EnsureNotBuilt();
-                Instant? previousStart = intervals.Count == 0 ? (Instant?) null : intervals.Last().End;
+                Instant previousStart = intervals.Count == 0 ? Instant.MinValue : intervals.Last().End;
                 // The ZoneInterval constructor will perform validation.
                 intervals.Add(new ZoneInterval(currentName, previousStart, transition, currentStandardOffset + currentSavings, currentSavings));
                 currentName = newName;
@@ -183,8 +192,8 @@ namespace NodaTime.Testing.TimeZones
             {
                 EnsureNotBuilt();
                 built = true;
-                Instant? previousStart = intervals.Count == 0 ? (Instant?) null : intervals.Last().End;
-                intervals.Add(new ZoneInterval(currentName, previousStart, null, currentStandardOffset + currentSavings, currentSavings));
+                Instant previousStart = intervals.Count == 0 ? Instant.MinValue : intervals.Last().End;
+                intervals.Add(new ZoneInterval(currentName, previousStart, Instant.MaxValue, currentStandardOffset + currentSavings, currentSavings));
                 return new MultiTransitionDateTimeZone(Id, intervals);
             }
 
@@ -199,7 +208,10 @@ namespace NodaTime.Testing.TimeZones
             /// <summary>
             /// We don't *really* want to implement this, but we want the collection initializer...
             /// </summary>
-            IEnumerator IEnumerable.GetEnumerator() => throw new NotImplementedException();
+            IEnumerator IEnumerable.GetEnumerator()
+            {
+                throw new NotImplementedException();
+            }
         }
     }
 }

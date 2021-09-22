@@ -3,6 +3,7 @@
 // as found in the LICENSE.txt file.
 
 using NodaTime.TimeZones;
+using System;
 
 namespace NodaTime.Testing.TimeZones
 {
@@ -11,23 +12,22 @@ namespace NodaTime.Testing.TimeZones
     /// </summary>
     public sealed class SingleTransitionDateTimeZone : DateTimeZone
     {
+        private readonly ZoneInterval earlyInterval;
         /// <summary>
-        /// Gets the <see cref="ZoneInterval"/> for the period before the transition, starting at the beginning of time.
+        /// The <see cref="ZoneInterval"/> for the period before the transition, starting at the beginning of time.
         /// </summary>
-        /// <value>The zone interval for the period before the transition, starting at the beginning of time.</value>
-        public ZoneInterval EarlyInterval { get; }
+        public ZoneInterval EarlyInterval { get { return earlyInterval; } }
+
+        private readonly ZoneInterval lateInterval;
+        /// <summary>
+        /// The <see cref="ZoneInterval"/> for the period after the transition, ending at the end of time.
+        /// </summary>
+        public ZoneInterval LateInterval { get { return lateInterval; } }
 
         /// <summary>
-        /// Gets the <see cref="ZoneInterval"/> for the period after the transition, ending at the end of time.
+        /// The transition instant of the zone.
         /// </summary>
-        /// <value>The zone interval for the period after the transition, ending at the end of time.</value>
-        public ZoneInterval LateInterval { get; }
-
-        /// <summary>
-        /// Gets the transition instant of the zone.
-        /// </summary>
-        /// <value>The transition instant of the zone.</value>
-        public Instant Transition => EarlyInterval.End;
+        public Instant Transition { get { return earlyInterval.End; } }
 
         /// <summary>
         /// Creates a zone with a single transition between two offsets.
@@ -61,22 +61,37 @@ namespace NodaTime.Testing.TimeZones
         public SingleTransitionDateTimeZone(Instant transitionPoint, Offset offsetBefore, Offset offsetAfter, string id)
             : base(id, false, Offset.Min(offsetBefore, offsetAfter), Offset.Max(offsetBefore, offsetAfter))
         {
-            EarlyInterval = new ZoneInterval(id + "-Early", null, transitionPoint,
+            earlyInterval = new ZoneInterval(id + "-Early", Instant.MinValue, transitionPoint,
                 offsetBefore, Offset.Zero);
-            LateInterval = new ZoneInterval(id + "-Late", transitionPoint, null,
+            lateInterval = new ZoneInterval(id + "-Late", transitionPoint, Instant.MaxValue,
                 offsetAfter, Offset.Zero);
         }
 
-        /// <summary>
-        /// Gets the zone interval for the given instant; the range of time around the instant in which the same Offset
-        /// applies (with the same split between standard time and daylight saving time, and with the same offset).
-        /// </summary>
+        /// <inheritdoc />
         /// <remarks>
-        /// This will always return a valid zone interval, as time zones cover the whole of time.
         /// This returns either the zone interval before or after the transition, based on the instant provided.
         /// </remarks>
-        /// <param name="instant">The <see cref="NodaTime.Instant" /> to query.</param>
-        /// <returns>The defined <see cref="NodaTime.TimeZones.ZoneInterval" />.</returns>
-        public override ZoneInterval GetZoneInterval(Instant instant) => EarlyInterval.Contains(instant) ? EarlyInterval : LateInterval;
+        public override ZoneInterval GetZoneInterval(Instant instant)
+        {
+            return earlyInterval.Contains(instant) ? earlyInterval : lateInterval;
+        }
+
+        /// <inheritdoc />
+        [Obsolete("General DateTimeZone equality is not supported in 2.0")]
+        protected override bool EqualsImpl(DateTimeZone zone)
+        {
+            SingleTransitionDateTimeZone otherZone = (SingleTransitionDateTimeZone)zone;
+            return Id == otherZone.Id && earlyInterval.Equals(otherZone.earlyInterval) && lateInterval.Equals(otherZone.lateInterval);
+        }
+
+        /// <inheritdoc />
+        public override int GetHashCode()
+        {
+            int hash = 17;
+            hash = hash * 31 + Id.GetHashCode();
+            hash = hash * 31 + earlyInterval.GetHashCode();
+            hash = hash * 31 + lateInterval.GetHashCode();
+            return hash;
+        }
     }
 }

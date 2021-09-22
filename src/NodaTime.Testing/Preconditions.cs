@@ -9,7 +9,7 @@ namespace NodaTime.Testing
     /// <summary>
     /// Helper static methods for argument/state validation. Copied from NodaTime.Utility,
     /// as we don't want the Testing assembly to have internal access to NodaTime, but we
-    /// don't really want to expose Preconditions publicly.
+    /// don't really want to expose Preconditions publically.
     /// </summary>
     internal static class Preconditions
     {
@@ -19,11 +19,37 @@ namespace NodaTime.Testing
         /// </summary>
         internal static T CheckNotNull<T>(T argument, string paramName) where T : class
         {
-            if (argument is null)
+            if (argument == null)
             {
                 throw new ArgumentNullException(paramName);
             }
             return argument;
+        }
+
+        internal static void CheckArgumentRange(string paramName, long value, long minInclusive, long maxInclusive)
+        {
+            if (value < minInclusive || value > maxInclusive)
+            {
+                throw new ArgumentOutOfRangeException(paramName,
+                    "Value should be in range [" + minInclusive + "-" + maxInclusive + "]");
+            }
+        }
+
+        internal static void CheckArgumentRange(string paramName, int value, int minInclusive, int maxInclusive)
+        {
+            if (value < minInclusive || value > maxInclusive)
+            {
+                throw new ArgumentOutOfRangeException(paramName,
+                    "Value should be in range [" + minInclusive + "-" + maxInclusive + "]");
+            }
+        }
+
+        internal static void CheckArgument(bool expression, string parameter, string message)
+        {
+            if (!expression)
+            {
+                throw new ArgumentException(message, parameter);
+            }
         }
     }
 }
