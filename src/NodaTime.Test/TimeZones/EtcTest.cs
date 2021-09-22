@@ -11,6 +11,7 @@ namespace NodaTime.Test.TimeZones
     /// Tests for fixed "Etc/GMT+x" zones. These just test that the time zones are built
     /// appropriately; FixedDateTimeZoneTest takes care of the rest.
     /// </summary>
+    [TestFixture]
     public class EtcTest
     {
         [Test]

@@ -11,6 +11,7 @@ namespace NodaTime.Test.TimeZones
     /// This is denoted in the zoneinfo database using lastThu 24:00, which was invalid
     /// in our parser.
     /// </summary>
+    [TestFixture]
     public class JordanTest
     {
         private static readonly DateTimeZone Jordan = DateTimeZoneProviders.Tzdb["Asia/Amman"];
@@ -41,8 +42,8 @@ namespace NodaTime.Test.TimeZones
             for (int year = 2000; year <= 2010; year++)
             {
                 LocalDate summer = new LocalDate(year, 6, 1);
-                var intervalPair = Jordan.MapLocal(summer.AtMidnight());
-                Assert.AreEqual(1, intervalPair.Count);
+                var intervalPair = Jordan.GetZoneIntervalPair(summer.AtMidnight().LocalInstant);
+                Assert.AreEqual(1, intervalPair.MatchingIntervals);
                 Assert.AreEqual(expectedDates[year - 2000], intervalPair.EarlyInterval.IsoLocalStart.Date);
             }
         }

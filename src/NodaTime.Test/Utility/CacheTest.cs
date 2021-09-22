@@ -3,12 +3,12 @@
 // as found in the LICENSE.txt file.
 
 using System;
-using System.Linq;
 using NodaTime.Utility;
 using NUnit.Framework;
 
 namespace NodaTime.Test.Utility
 {
+    [TestFixture]
     public class CacheTest
     {
         private int factoryCallCount;
@@ -22,7 +22,7 @@ namespace NodaTime.Test.Utility
         {
             factoryCallCount = 0;
             return new Cache<string, int>(3, text => { factoryCallCount++; return text.Length; }, 
-                                          StringComparer.OrdinalIgnoreCase);
+                                          StringComparer.InvariantCultureIgnoreCase);
         }
 
         [Test]
@@ -65,9 +65,9 @@ namespace NodaTime.Test.Utility
             Assert.AreEqual(1, cache.GetOrAdd("A"));
             Assert.AreEqual(2, cache.GetOrAdd("BB"));
             Assert.AreEqual(3, cache.GetOrAdd("CCC"));
-            CollectionAssert.AreEqual(new[] { "A", "BB", "CCC" }, cache.Keys.OrderBy(k => k));
+            CollectionAssert.AreEqual(new[] { "A", "BB", "CCC" }, cache.Keys);
             Assert.AreEqual(4, cache.GetOrAdd("DDDD"));
-            CollectionAssert.AreEqual(new[] { "BB", "CCC", "DDDD" }, cache.Keys.OrderBy(k => k));
+            CollectionAssert.AreEqual(new[] { "BB", "CCC", "DDDD" }, cache.Keys);
             Assert.AreEqual(3, cache.Count);
             Assert.AreEqual(4, factoryCallCount);
         }

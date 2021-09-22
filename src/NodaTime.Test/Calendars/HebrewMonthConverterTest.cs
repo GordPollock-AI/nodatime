@@ -7,6 +7,7 @@ using NUnit.Framework;
 
 namespace NodaTime.Test.Calendars
 {
+    [TestFixture]
     public class HebrewMonthConverterTest
     {
         private const int SampleLeapYear = 5502;

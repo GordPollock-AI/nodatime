@@ -10,6 +10,7 @@ using NUnit.Framework;
 
 namespace NodaTime.Test.TimeZones
 {
+    [TestFixture]
     public class PartialZoneIntervalMapTest
     {
         // Arbitrary instants which are useful for the tests. They happen to be a year
@@ -61,31 +62,28 @@ namespace NodaTime.Test.TimeZones
         {
             var maps = new List<PartialZoneIntervalMap>();
             // We just reuse ExpectedZone as the IZoneIntervalMap; PartialZoneIntervalMap itself will clamp the ends.
-            var current = Instant.BeforeMinValue;
+            var current = Instant.MinValue;
             foreach (var instant in intervalBreaks.Select(c => Instants[c]))
             {
                 maps.Add(new PartialZoneIntervalMap(current, instant, ExpectedZone));
                 current = instant;
             }
-            maps.Add(new PartialZoneIntervalMap(current, Instant.AfterMaxValue, ExpectedZone));
+            maps.Add(new PartialZoneIntervalMap(current, Instant.MaxValue, ExpectedZone));
 
             var converted = PartialZoneIntervalMap.ConvertToFullMap(maps);
             CollectionAssert.AreEqual(GetZoneIntervals(ExpectedZone), GetZoneIntervals(converted));
         }
 
-        // TODO: Consider making this part of the NodaTime assembly.
-        // It's just a copy from DateTimeZone, with the interval taken out.
-        // It could be an extension method on IZoneIntervalMap, with optional interval.
-        // On the other hand, IZoneIntervalMap is internal, so it would only be used by us.
+        // TODO: Expose this, too. It's just a copy from DateTimeZone, with the interval taken out. It could be an extension method on IZoneIntervalMap, with optional interval.
         private static IEnumerable<ZoneInterval> GetZoneIntervals(IZoneIntervalMap map)
         {
             var current = Instant.MinValue;
-            while (current < Instant.AfterMaxValue)
+            while (current < Instant.MaxValue)
             {
                 var zoneInterval = map.GetZoneInterval(current);
                 yield return zoneInterval;
                 // If this is the end of time, this will just fail on the next comparison.
-                current = zoneInterval.RawEnd;
+                current = zoneInterval.End;
             }
         }
     }

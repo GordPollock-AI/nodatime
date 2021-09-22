@@ -18,29 +18,26 @@ namespace NodaTime.Test.Text
     /// </summary>
     public abstract class PatternTestData<T>
     {
-        internal T Value { get; }
+        private readonly T value;
+
+        internal T Value { get { return value; } }
 
         protected abstract T DefaultTemplate { get; }
 
         /// <summary>
         /// Culture of the pattern.
         /// </summary>
-        internal CultureInfo Culture { get; set; } = CultureInfo.InvariantCulture;
-
-        /// <summary>
-        /// Standard pattern, expected to format/parse the same way as Pattern.
-        /// </summary>
-        internal IPattern<T>? StandardPattern { get; set; }
+        internal CultureInfo Culture { get; set; }
 
         /// <summary>
         /// Pattern text.
         /// </summary>
-        internal string? Pattern { get; set; }
+        internal string Pattern { get; set; }
 
         /// <summary>
         /// String value to be parsed, and expected result of formatting.
         /// </summary>
-        internal string? Text { get; set; }
+        internal string Text { get; set; }
 
         /// <summary>
         /// Template value to specify in the pattern
@@ -50,21 +47,24 @@ namespace NodaTime.Test.Text
         /// <summary>
         /// Extra description for the test case
         /// </summary>
-        internal string? Description { get; set; }
+        internal string Description { get; set; }
 
         /// <summary>
         /// Message format to verify for exceptions.
         /// </summary>
-        internal string? Message { get; set; }
+        internal string Message { get; set; }
+
+        private readonly List<object> parameters = new List<object>();
 
         /// <summary>
         /// Message parameters to verify for exceptions.
         /// </summary>
-        internal List<object> Parameters { get; } = new List<object>();
+        internal List<object> Parameters { get { return parameters; } }
 
         internal PatternTestData(T value)
         {
-            this.Value = value;
+            this.value = value;
+            Culture = CultureInfo.InvariantCulture;
             Template = DefaultTemplate;
         }
 
@@ -74,14 +74,9 @@ namespace NodaTime.Test.Text
         {
             Assert.IsNull(Message);
             IPattern<T> pattern = CreatePattern();
-            var result = pattern.Parse(Text!);
+            var result = pattern.Parse(Text);
             var actualValue = result.Value;
             Assert.AreEqual(Value, actualValue);
-
-            if (StandardPattern != null)
-            {
-                Assert.AreEqual(Value, StandardPattern.Parse(Text!).Value);
-            }
         }
 
         internal void TestFormat()
@@ -89,18 +84,13 @@ namespace NodaTime.Test.Text
             Assert.IsNull(Message);
             IPattern<T> pattern = CreatePattern();
             Assert.AreEqual(Text, pattern.Format(Value));
-
-            if (StandardPattern != null)
-            {
-                Assert.AreEqual(Text, StandardPattern.Format(Value));
-            }
         }
 
         internal void TestParsePartial()
         {
             var pattern = CreatePartialPattern();
             Assert.IsNull(Message);
-            var cursor = new ValueCursor($"^{Text}#");
+            var cursor = new ValueCursor("^" + Text + "#");
             // Move to the ^
             cursor.MoveNext();
             // Move to the start of the text
@@ -116,18 +106,18 @@ namespace NodaTime.Test.Text
             throw new NotImplementedException();
         }
 
-        internal void TestAppendFormat()
+        internal void TestFormatPartial()
         {
+            var pattern = CreatePartialPattern();
             Assert.IsNull(Message);
-            var pattern = CreatePattern();
             var builder = new StringBuilder("x");
-            pattern.AppendFormat(Value, builder);
-            Assert.AreEqual($"x{Text}", builder.ToString());
+            pattern.FormatPartial(Value, builder);
+            Assert.AreEqual("x" + Text, builder.ToString());
         }
 
         internal void TestInvalidPattern()
         {
-            string expectedMessage = FormatMessage(Message!, Parameters.ToArray());
+            string expectedMessage = FormatMessage(Message, parameters.ToArray());
             try
             {
                 CreatePattern();
@@ -142,10 +132,10 @@ namespace NodaTime.Test.Text
 
         public void TestParseFailure()
         {
-            string expectedMessage = FormatMessage(Message!, Parameters.ToArray());
+            string expectedMessage = FormatMessage(Message, parameters.ToArray());
             IPattern<T> pattern = CreatePattern();
-            var result = pattern.Parse(Text!);
-            Assert.IsFalse(result.Success, "Expected parsing to fail, but it succeeded");
+            var result = pattern.Parse(Text);
+            Assert.IsFalse(result.Success);
             try
             {
                 result.GetValueOrThrow();
@@ -165,40 +155,28 @@ namespace NodaTime.Test.Text
             try
             {
                 StringBuilder builder = new StringBuilder();
-                string valueText =
-                    Value is IFormattable formattable ? formattable.ToString(ValuePatternText, CultureInfo.InvariantCulture)
-                    : Value?.ToString() ?? "";
-                builder.AppendFormat("Value={0};", valueText);
-                builder.AppendFormat("Pattern={0};", Pattern);
-                builder.AppendFormat("Text={0};", Text);
+                builder.AppendFormat("Value={0}; ", Value);
+                builder.AppendFormat("Pattern={0}; ", Pattern);
+                builder.AppendFormat("Text={0}; ", Text);
                 if (Culture != CultureInfo.InvariantCulture)
                 {
-                    builder.AppendFormat("Culture={0};", Culture);
+                    builder.AppendFormat("Culture={0}; ", Culture);
                 }
                 if (Description != null)
                 {
-                    builder.AppendFormat("Description={0};", Description);
+                    builder.AppendFormat("Description={0}; ", Description);
                 }
-                if (!Template!.Equals(DefaultTemplate))
+                if (!Template.Equals(DefaultTemplate))
                 {
                     builder.AppendFormat("Template={0};", Template);
                 }
-                // Trim the trailing semi-colon
-                builder.Length--;
-                return NamedWrapper<T>.SanitizeName(builder.ToString());
+                return builder.ToString();
             }
             catch (Exception)
             {
                 return "Formatting of test name failed";
             }
         }
-
-        /// <summary>
-        /// Returns the pattern text to use when formatting the value for the test name.
-        /// Defaults to null, implying the default pattern for the type, but can be overridden to provide
-        /// a more fine-grained pattern. This property is only used if the value implements IFormattable.
-        /// </summary>
-        protected virtual string? ValuePatternText => null;
 
         /// <summary>
         /// Formats a message, giving a *useful* error message on failure. It can be a pain checking exactly what
@@ -212,7 +190,7 @@ namespace NodaTime.Test.Text
             }
             catch (FormatException)
             {
-                throw new FormatException($"Failed to format string '{message}' with {parameters.Length} parameters");
+                throw new FormatException(string.Format("Failed to format string '{0}' with {1} parameters", message, parameters.Length));
             }
         }
     }

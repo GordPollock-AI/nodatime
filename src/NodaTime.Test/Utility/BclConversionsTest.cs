@@ -5,10 +5,10 @@
 using System;
 using NodaTime.Utility;
 using NUnit.Framework;
-using NodaTime.Extensions;
 
 namespace NodaTime.Test.Utility
 {
+    [TestFixture]
     public class BclConversionsTest
     {
         // This tests both directions for all valid values.
@@ -25,8 +25,6 @@ namespace NodaTime.Test.Utility
         {
             Assert.AreEqual(bcl, BclConversions.ToDayOfWeek(noda));
             Assert.AreEqual(noda, BclConversions.ToIsoDayOfWeek(bcl));
-            Assert.AreEqual(bcl, noda.ToDayOfWeek());
-            Assert.AreEqual(noda, bcl.ToIsoDayOfWeek());
         }
 
         [TestCase(0)]
@@ -34,7 +32,6 @@ namespace NodaTime.Test.Utility
         public void ToDayOfWeek_InvalidValues(IsoDayOfWeek noda)
         {
             Assert.Throws<ArgumentOutOfRangeException>(() => BclConversions.ToDayOfWeek(noda));
-            Assert.Throws<ArgumentOutOfRangeException>(() => noda.ToDayOfWeek());
         }
 
         [TestCase(-1)]
@@ -42,7 +39,6 @@ namespace NodaTime.Test.Utility
         public void ToIsoDayOfWeek_InvalidValues(DayOfWeek bcl)
         {
             Assert.Throws<ArgumentOutOfRangeException>(() => BclConversions.ToIsoDayOfWeek(bcl));
-            Assert.Throws<ArgumentOutOfRangeException>(() => bcl.ToIsoDayOfWeek());
         }
     }
 }

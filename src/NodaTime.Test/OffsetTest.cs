@@ -8,17 +8,18 @@ using NUnit.Framework;
 
 namespace NodaTime.Test
 {
+    [TestFixture]
     public partial class OffsetTest
     {
-        private static readonly Offset ThreeHours = TestObjects.CreatePositiveOffset(3, 0, 0);
-        private static readonly Offset NegativeThreeHours = TestObjects.CreateNegativeOffset(3, 0, 0);
-        private static readonly Offset NegativeTwelveHours = TestObjects.CreateNegativeOffset(12, 0, 0);
+        private static readonly Offset ThreeHours = TestObjects.CreatePositiveOffset(3, 0, 0, 0);
+        private static readonly Offset NegativeThreeHours = TestObjects.CreateNegativeOffset(3, 0, 0, 0);
+        private static readonly Offset NegativeTwelveHours = TestObjects.CreateNegativeOffset(12, 0, 0, 0);
 
         [Test]
         public void Max()
         {
-            Offset x = Offset.FromSeconds(100);
-            Offset y = Offset.FromSeconds(200);
+            Offset x = Offset.FromMilliseconds(100);
+            Offset y = Offset.FromMilliseconds(200);
             Assert.AreEqual(y, Offset.Max(x, y));
             Assert.AreEqual(y, Offset.Max(y, x));
             Assert.AreEqual(x, Offset.Max(x, Offset.MinValue));
@@ -30,8 +31,8 @@ namespace NodaTime.Test
         [Test]
         public void Min()
         {
-            Offset x = Offset.FromSeconds(100);
-            Offset y = Offset.FromSeconds(200);
+            Offset x = Offset.FromMilliseconds(100);
+            Offset y = Offset.FromMilliseconds(200);
             Assert.AreEqual(x, Offset.Min(x, y));
             Assert.AreEqual(x, Offset.Min(y, x));
             Assert.AreEqual(Offset.MinValue, Offset.Min(x, Offset.MinValue));
@@ -43,8 +44,8 @@ namespace NodaTime.Test
         [Test]
         public void ToTimeSpan()
         {
-            TimeSpan ts = Offset.FromSeconds(1234).ToTimeSpan();
-            Assert.AreEqual(ts, TimeSpan.FromSeconds(1234));
+            TimeSpan ts = Offset.FromMilliseconds(1234).ToTimeSpan();
+            Assert.AreEqual(ts, TimeSpan.FromMilliseconds(1234));
         }
 
         [Test]
@@ -57,8 +58,8 @@ namespace NodaTime.Test
         [Test]
         public void FromTimeSpan_Truncation()
         {
-            TimeSpan ts = TimeSpan.FromMilliseconds(1000 + 200);
-            Assert.AreEqual(Offset.FromSeconds(1), Offset.FromTimeSpan(ts));
+            TimeSpan ts = TimeSpan.FromTicks(10000 + 200);
+            Assert.AreEqual(Offset.FromMilliseconds(1), Offset.FromTimeSpan(ts));
         }
 
         [Test]
@@ -77,7 +78,14 @@ namespace NodaTime.Test
             var actual = new Offset();
             Assert.AreEqual(Offset.Zero, actual);
         }
-         
+
+        [Test]
+        public void BinarySerialization()
+        {
+            TestHelper.AssertBinaryRoundtrip(Offset.FromMilliseconds(1234567));
+            TestHelper.AssertBinaryRoundtrip(Offset.FromMilliseconds(-1234567));
+        }
+
         [Test]
         public void XmlSerialization()
         {

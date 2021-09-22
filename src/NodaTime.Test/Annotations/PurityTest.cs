@@ -13,6 +13,7 @@ namespace NodaTime.Test.Annotations
     /// <summary>
     /// Tests for annotations around purity. No sniggering at the back, please.
     /// </summary>
+    [TestFixture]
     public class PurityTest
     {
         [Test]
@@ -21,16 +22,15 @@ namespace NodaTime.Test.Annotations
             var implicitlyPureNames = new HashSet<string> { "Equals", "GetHashCode", "CompareTo", "ToString" };
 
             var impureMethods = typeof(Instant).Assembly
-                                               .DefinedTypes
-                                               .Where(t => t.IsValueType && (t.IsPublic || t.IsNestedPublic))
+                                               .GetTypes()
+                                               .Where(t => t.IsValueType && t.IsPublic)
                                                .OrderBy(t => t.Name)
-                                               .SelectMany(m => m.DeclaredMethods)
-                                               .Where(m => m.IsPublic && !m.IsStatic)
+                                               .SelectMany(m => m.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly))
                                                .Where(m => !m.IsSpecialName) // Real methods, not properties
                                                .Where(m => !implicitlyPureNames.Contains(m.Name))
-                                               .Where(m => !m.IsDefined(typeof(PureAttribute)));
-
-            TestHelper.AssertNoFailures(impureMethods, m => $"{m.DeclaringType?.Name}.{m.Name}");
+                                               .Where(m => !m.IsDefined(typeof(PureAttribute), false))
+                                               .ToList();
+            Assert.IsEmpty(impureMethods, "Impure methods: " + string.Join(", ", impureMethods.Select(m => m.ReflectedType.Name + "." + m.Name)));
         }
     }
 }

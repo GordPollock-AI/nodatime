@@ -2,8 +2,6 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using System;
-using System.Collections;
 using System.Linq;
 using NodaTime.Testing.TimeZones;
 using NodaTime.TimeZones;
@@ -12,13 +10,14 @@ using NUnit.Framework;
 namespace NodaTime.Test.Testing.TimeZones
 {
     // Test as much to demonstrate a couple of extremes of building as much as anything else...
+    [TestFixture]
     public class MultiTransitionDateTimeZoneTest
     {
         [Test]
         public void SimpleBuilding()
         {
-            var transition1 = Instant.FromUnixTimeTicks(0L);
-            var transition2 = Instant.FromUnixTimeTicks(100000L);
+            var transition1 = new Instant(0L);
+            var transition2 = new Instant(100000L);
             var zone = new MultiTransitionDateTimeZone.Builder
             {
                 { transition1, 5 },
@@ -27,7 +26,7 @@ namespace NodaTime.Test.Testing.TimeZones
             var intervals = zone.GetZoneIntervals(transition1 - Duration.Epsilon, transition2 + Duration.Epsilon).ToList();
             Assert.AreEqual(3, intervals.Count);
             Assert.AreEqual(Offset.Zero, intervals[0].WallOffset);
-            Assert.AreEqual(Instant.BeforeMinValue, intervals[0].RawStart);
+            Assert.AreEqual(Instant.MinValue, intervals[0].Start);
             Assert.AreEqual(transition1, intervals[0].End);
 
             Assert.AreEqual(Offset.FromHours(5), intervals[1].WallOffset);
@@ -36,27 +35,14 @@ namespace NodaTime.Test.Testing.TimeZones
 
             Assert.AreEqual(Offset.FromHours(3), intervals[2].WallOffset);
             Assert.AreEqual(transition2, intervals[2].Start);
-            Assert.AreEqual(Instant.AfterMaxValue, intervals[2].RawEnd);
-        }
-
-        [Test]
-        public void Transitions()
-        {
-            var transition1 = Instant.FromUnixTimeTicks(0L);
-            var transition2 = Instant.FromUnixTimeTicks(100000L);
-            var zone = new MultiTransitionDateTimeZone.Builder
-            {
-                { transition1, 5 },
-                { transition2, 3 }
-            }.Build();
-            CollectionAssert.AreEqual(new[] { transition1, transition2 }, zone.Transitions);
+            Assert.AreEqual(Instant.MaxValue, intervals[2].End);
         }
 
         [Test]
         public void ComplexBuilding()
         {
-            var transition1 = Instant.FromUnixTimeTicks(0L);
-            var transition2 = Instant.FromUnixTimeTicks(100000L);
+            var transition1 = new Instant(0L);
+            var transition2 = new Instant(100000L);
             var zone = new MultiTransitionDateTimeZone.Builder(2, 1, "X")
             {
                 { transition1, 2, 0, "Y" },
@@ -66,27 +52,12 @@ namespace NodaTime.Test.Testing.TimeZones
             // ZoneInterval uses wall offset and savings...
             var expected = new[]
             {
-                new ZoneInterval("X", Instant.BeforeMinValue, transition1, Offset.FromHours(3), Offset.FromHours(1)),
+                new ZoneInterval("X", Instant.MinValue, transition1, Offset.FromHours(3), Offset.FromHours(1)),
                 new ZoneInterval("Y", transition1, transition2, Offset.FromHours(2), Offset.FromHours(0)),
-                new ZoneInterval("Z", transition2, Instant.AfterMaxValue, Offset.FromHours(2), Offset.FromHours(1)),
+                new ZoneInterval("Z", transition2, Instant.MaxValue, Offset.FromHours(2), Offset.FromHours(1)),
             };
 
             CollectionAssert.AreEqual(expected, actual);
-        }
-
-        [Test]
-        public void BuildTwice()
-        {
-            var builder = new MultiTransitionDateTimeZone.Builder();
-            builder.Build();
-            Assert.Throws<InvalidOperationException>(() => builder.Build());
-        }
-
-        [Test]
-        public void BuilderGetEnumerator_Throws()
-        {
-            var builder = new MultiTransitionDateTimeZone.Builder();
-            Assert.Throws<NotImplementedException>(() => ((IEnumerable)builder).GetEnumerator());
         }
     }
 }

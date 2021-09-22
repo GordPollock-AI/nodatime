@@ -8,6 +8,7 @@ using NUnit.Framework;
 
 namespace NodaTime.Test.TimeZones
 {
+    [TestFixture]
     public class ResolversTest
     {
         /// <summary>
@@ -72,20 +73,6 @@ namespace NodaTime.Test.TimeZones
         }
 
         [Test]
-        public void ReturnForwardShifted()
-        {
-            var mapping = GapZone.MapLocal(TimeInTransition);
-            Assert.AreEqual(0, mapping.Count);
-            var resolved = Resolvers.ReturnForwardShifted(TimeInTransition, GapZone, mapping.EarlyInterval, mapping.LateInterval);
-
-            var gap = mapping.LateInterval.WallOffset.Ticks - mapping.EarlyInterval.WallOffset.Ticks;
-            var expected = TimeInTransition.ToLocalInstant().Minus(mapping.LateInterval.WallOffset).PlusTicks(gap);
-            Assert.AreEqual(expected, resolved.ToInstant());
-            Assert.AreEqual(mapping.LateInterval.WallOffset, resolved.Offset);
-            Assert.AreEqual(GapZone, resolved.Zone);
-        }
-
-        [Test]
         public void ThrowWhenSkipped()
         {
             var mapping = GapZone.MapLocal(TimeInTransition);
@@ -102,13 +89,13 @@ namespace NodaTime.Test.TimeZones
 
             LocalDateTime localTime = new LocalDateTime(1900, 1, 1, 0, 0);
             var resolved = resolver(GapZone.MapLocal(localTime));
-            Assert.AreEqual(new ZonedDateTime(localTime.WithOffset(GapZone.EarlyInterval.WallOffset), GapZone), resolved);
+            Assert.AreEqual(new ZonedDateTime(localTime, GapZone.EarlyInterval.WallOffset, GapZone), resolved);
         }
 
         [Test]
         public void CreateResolver_Ambiguous()
         {
-            ZonedDateTime zoned = new ZonedDateTime(TimeInTransition.PlusDays(1).WithOffset(GapZone.EarlyInterval.WallOffset), GapZone);
+            ZonedDateTime zoned = new ZonedDateTime(TimeInTransition.PlusDays(1), GapZone.EarlyInterval.WallOffset, GapZone);
             AmbiguousTimeResolver ambiguityResolver = (earlier, later) => zoned;
             SkippedTimeResolver skippedTimeResolver = (local, zone, before, after) => { Assert.Fail("Shouldn't be called"); return default(ZonedDateTime); };
             var resolver = Resolvers.CreateMappingResolver(ambiguityResolver, skippedTimeResolver);
@@ -120,7 +107,7 @@ namespace NodaTime.Test.TimeZones
         [Test]
         public void CreateResolver_Skipped()
         {
-            ZonedDateTime zoned = new ZonedDateTime(TimeInTransition.PlusDays(1).WithOffset(GapZone.EarlyInterval.WallOffset), GapZone);
+            ZonedDateTime zoned = new ZonedDateTime(TimeInTransition.PlusDays(1), GapZone.EarlyInterval.WallOffset, GapZone);
             AmbiguousTimeResolver ambiguityResolver = (earlier, later) => { Assert.Fail("Shouldn't be called"); return default(ZonedDateTime); };
             SkippedTimeResolver skippedTimeResolver = (local, zone, before, after) => zoned;
             var resolver = Resolvers.CreateMappingResolver(ambiguityResolver, skippedTimeResolver);

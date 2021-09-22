@@ -64,7 +64,7 @@ namespace NodaTime.Test
         }
 
         [Test]
-        public void PlusDays_SameMonth()
+        public void PlusDays_Simple()
         {
             LocalDate start = new LocalDate(2011, 1, 15);
             LocalDate expected = new LocalDate(2011, 1, 23);
@@ -118,14 +118,6 @@ namespace NodaTime.Test
         }
 
         [Test]
-        public void PlusDays_LargeValue()
-        {
-            LocalDate start = new LocalDate(2013, 2, 26);
-            LocalDate expected = new LocalDate(2015, 2, 26);
-            Assert.AreEqual(expected, start.PlusDays(365 * 2));
-        }
-
-        [Test]
         public void PlusWeeks_Simple()
         {
             LocalDate start = new LocalDate(2011, 4, 2);
@@ -135,32 +127,19 @@ namespace NodaTime.Test
             Assert.AreEqual(expectedBackward, start.PlusWeeks(-3));
         }
 
-        [Test]
-        [TestCase(-9998, 1, 1, -1)]
-        [TestCase(-9996, 1, 1, -1000)]
-        [TestCase(9999, 12, 31, 1)]
-        [TestCase(9997, 12, 31, 1000)]
-        [TestCase(2000, 1, 1, int.MaxValue)]
-        [TestCase(1, 1, 1, int.MinValue)]
-        public void PlusDays_OutOfRange(int year, int month, int day, int days)
-        {
-            var start = new LocalDate(year, month, day);
-            TestHelper.AssertOverflow(start.PlusDays, days);
-        }
-
         // Each test case gives a day-of-month in November 2011 and a target "next day of week";
         // the result is the next day-of-month in November 2011 with that target day.
         // The tests are picked somewhat arbitrarily...
-        [TestCase(10, IsoDayOfWeek.Wednesday, ExpectedResult = 16)]
-        [TestCase(10, IsoDayOfWeek.Friday, ExpectedResult = 11)]
-        [TestCase(10, IsoDayOfWeek.Thursday, ExpectedResult = 17)]
-        [TestCase(11, IsoDayOfWeek.Wednesday, ExpectedResult = 16)]
-        [TestCase(11, IsoDayOfWeek.Thursday, ExpectedResult = 17)]
-        [TestCase(11, IsoDayOfWeek.Friday, ExpectedResult = 18)]
-        [TestCase(11, IsoDayOfWeek.Saturday, ExpectedResult = 12)]
-        [TestCase(11, IsoDayOfWeek.Sunday, ExpectedResult = 13)]
-        [TestCase(12, IsoDayOfWeek.Friday, ExpectedResult = 18)]
-        [TestCase(13, IsoDayOfWeek.Friday, ExpectedResult = 18)]
+        [TestCase(10, IsoDayOfWeek.Wednesday, Result = 16)]
+        [TestCase(10, IsoDayOfWeek.Friday, Result = 11)]
+        [TestCase(10, IsoDayOfWeek.Thursday, Result = 17)]
+        [TestCase(11, IsoDayOfWeek.Wednesday, Result = 16)]
+        [TestCase(11, IsoDayOfWeek.Thursday, Result = 17)]
+        [TestCase(11, IsoDayOfWeek.Friday, Result = 18)]
+        [TestCase(11, IsoDayOfWeek.Saturday, Result = 12)]
+        [TestCase(11, IsoDayOfWeek.Sunday, Result = 13)]
+        [TestCase(12, IsoDayOfWeek.Friday, Result = 18)]
+        [TestCase(13, IsoDayOfWeek.Friday, Result = 18)]
         public int Next(int dayOfMonth, IsoDayOfWeek targetDayOfWeek)
         {
             LocalDate start = new LocalDate(2011, 11, dayOfMonth);
@@ -181,16 +160,16 @@ namespace NodaTime.Test
 
         // Each test case gives a day-of-month in November 2011 and a target "next day of week";
         // the result is the next day-of-month in November 2011 with that target day.
-        [TestCase(10, IsoDayOfWeek.Wednesday, ExpectedResult = 9)]
-        [TestCase(10, IsoDayOfWeek.Friday, ExpectedResult = 4)]
-        [TestCase(10, IsoDayOfWeek.Thursday, ExpectedResult = 3)]
-        [TestCase(11, IsoDayOfWeek.Wednesday, ExpectedResult = 9)]
-        [TestCase(11, IsoDayOfWeek.Thursday, ExpectedResult = 10)]
-        [TestCase(11, IsoDayOfWeek.Friday, ExpectedResult = 4)]
-        [TestCase(11, IsoDayOfWeek.Saturday, ExpectedResult = 5)]
-        [TestCase(11, IsoDayOfWeek.Sunday, ExpectedResult = 6)]
-        [TestCase(12, IsoDayOfWeek.Friday, ExpectedResult = 11)]
-        [TestCase(13, IsoDayOfWeek.Friday, ExpectedResult = 11)]
+        [TestCase(10, IsoDayOfWeek.Wednesday, Result = 9)]
+        [TestCase(10, IsoDayOfWeek.Friday, Result = 4)]
+        [TestCase(10, IsoDayOfWeek.Thursday, Result = 3)]
+        [TestCase(11, IsoDayOfWeek.Wednesday, Result = 9)]
+        [TestCase(11, IsoDayOfWeek.Thursday, Result = 10)]
+        [TestCase(11, IsoDayOfWeek.Friday, Result = 4)]
+        [TestCase(11, IsoDayOfWeek.Saturday, Result = 5)]
+        [TestCase(11, IsoDayOfWeek.Sunday, Result = 6)]
+        [TestCase(12, IsoDayOfWeek.Friday, Result = 11)]
+        [TestCase(13, IsoDayOfWeek.Friday, Result = 11)]
         public int Previous(int dayOfMonth, IsoDayOfWeek targetDayOfWeek)
         {
             LocalDate start = new LocalDate(2011, 11, dayOfMonth);
@@ -210,13 +189,5 @@ namespace NodaTime.Test
         }
 
         // No tests for non-ISO-day-of-week calendars as we don't have any yet.
-
-        [Test]
-        public void With()
-        {
-            LocalDate start = new LocalDate(2014, 6, 27);
-            LocalDate expected = new LocalDate(2014, 6, 30);
-            Assert.AreEqual(expected, start.With(DateAdjusters.EndOfMonth));
-        }
     }
 }

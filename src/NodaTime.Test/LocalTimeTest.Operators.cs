@@ -32,7 +32,7 @@ namespace NodaTime.Test
         {
             LocalTime date = new LocalTime(12, 0);
             // Call to ToString just to make it a valid statement
-            Assert.Throws<ArgumentNullException>(() => (date + (Period)null!).ToString());
+            Assert.Throws<ArgumentNullException>(() => (date + (Period)null).ToString());
         }
 
         [Test]
@@ -58,7 +58,7 @@ namespace NodaTime.Test
         {
             LocalTime date = new LocalTime(12, 0);
             // Call to ToString just to make it a valid statement
-            Assert.Throws<ArgumentNullException>(() => (date - (Period)null!).ToString());
+            Assert.Throws<ArgumentNullException>(() => (date - (Period)null).ToString());
         }
 
         [Test]
@@ -93,13 +93,8 @@ namespace NodaTime.Test
         {
             LocalTime start = new LocalTime(20, 30);
             Period period = Period.FromHours(3) + Period.FromMinutes(10);
-            LocalTime end = start + period;
             Assert.AreEqual(start - period, LocalTime.Subtract(start, period));
             Assert.AreEqual(start - period, start.Minus(period));
-
-            Assert.AreEqual(period, end - start);
-            Assert.AreEqual(period, LocalTime.Subtract(end, start));
-            Assert.AreEqual(period, end.Minus(start));
         }
 
         [Test]
@@ -139,7 +134,7 @@ namespace NodaTime.Test
         public void Comparison_IgnoresOriginalCalendar()
         {
             LocalDateTime dateTime1 = new LocalDateTime(1900, 1, 1, 10, 30, 0);
-            LocalDateTime dateTime2 = dateTime1.WithCalendar(CalendarSystem.Julian);
+            LocalDateTime dateTime2 = dateTime1.WithCalendar(CalendarSystem.GetJulianCalendar(3));
 
             // Calendar information is propagated into LocalDate, but not into LocalTime
             Assert.IsFalse(dateTime1.Date == dateTime2.Date);
@@ -183,8 +178,9 @@ namespace NodaTime.Test
         public void IComparableCompareTo_Null_Positive()
         {
             var instance = new LocalTime(10, 30, 45);
-            var comparable = (IComparable)instance;
-            var result = comparable.CompareTo(null);
+            var i_instance = (IComparable)instance;
+            object arg = null;
+            var result = i_instance.CompareTo(arg);
             Assert.That(result, Is.GreaterThan(0));
         }
 

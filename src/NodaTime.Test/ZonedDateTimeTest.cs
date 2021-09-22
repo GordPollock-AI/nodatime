@@ -9,7 +9,6 @@ using NodaTime.Calendars;
 using NodaTime.Testing.TimeZones;
 using NodaTime.Text;
 using NodaTime.TimeZones;
-using NodaTime.Xml;
 using NUnit.Framework;
 
 namespace NodaTime.Test
@@ -20,6 +19,7 @@ namespace NodaTime.Test
     /// functionality is usually through ZonedDateTime. This makes testing easier,
     /// as well as serving as more useful documentation.
     /// </summary>
+    [TestFixture]
     public class ZonedDateTimeTest
     {
         /// <summary>
@@ -30,32 +30,33 @@ namespace NodaTime.Test
         [Test]
         public void SimpleProperties()
         {
-            var value = SampleZone.AtStrictly(new LocalDateTime(2012, 2, 10, 8, 9, 10).PlusNanoseconds(123456789));
+            var value = SampleZone.AtStrictly(new LocalDateTime(2012, 2, 10, 8, 9, 10, 11, 12));
             Assert.AreEqual(new LocalDate(2012, 2, 10), value.Date);
-            Assert.AreEqual(LocalTime.FromHourMinuteSecondNanosecond(8, 9, 10, 123456789), value.TimeOfDay);
+            Assert.AreEqual(new LocalTime(8, 9, 10, 11, 12), value.TimeOfDay);
             Assert.AreEqual(Era.Common, value.Era);
+            Assert.AreEqual(20, value.CenturyOfEra);
+            Assert.AreEqual(12, value.YearOfCentury);
             Assert.AreEqual(2012, value.Year);
             Assert.AreEqual(2012, value.YearOfEra);
             Assert.AreEqual(2, value.Month);
             Assert.AreEqual(10, value.Day);
-            Assert.AreEqual(IsoDayOfWeek.Friday, value.DayOfWeek);
+            Assert.AreEqual(6, value.WeekOfWeekYear);
+            Assert.AreEqual(2012, value.WeekYear);
+            Assert.AreEqual(IsoDayOfWeek.Friday, value.IsoDayOfWeek);
+            Assert.AreEqual((int) IsoDayOfWeek.Friday, value.DayOfWeek);
             Assert.AreEqual(41, value.DayOfYear);
             Assert.AreEqual(8, value.ClockHourOfHalfDay);
             Assert.AreEqual(8, value.Hour);
             Assert.AreEqual(9, value.Minute);
             Assert.AreEqual(10, value.Second);
-            Assert.AreEqual(123, value.Millisecond);
-            Assert.AreEqual(1234567, value.TickOfSecond);
+            Assert.AreEqual(11, value.Millisecond);
+            Assert.AreEqual(11 * 10000 + 12, value.TickOfSecond);
             Assert.AreEqual(8 * NodaConstants.TicksPerHour +
                             9 * NodaConstants.TicksPerMinute +
                             10 * NodaConstants.TicksPerSecond +
-                            1234567,
+                            11 * NodaConstants.TicksPerMillisecond +
+                            12,
                             value.TickOfDay);
-            Assert.AreEqual(8 * NodaConstants.NanosecondsPerHour +
-                            9 * NodaConstants.NanosecondsPerMinute +
-                            10 * NodaConstants.NanosecondsPerSecond +
-                            123456789,
-                            value.NanosecondOfDay);
         }
 
         [Test]
@@ -65,8 +66,8 @@ namespace NodaTime.Test
             ZonedDateTime before = SampleZone.AtStrictly(new LocalDateTime(2011, 6, 12, 15, 0));
             // 24 hours elapsed, and it's 4pm
             ZonedDateTime afterExpected = SampleZone.AtStrictly(new LocalDateTime(2011, 6, 13, 16, 0));
-            ZonedDateTime afterAdd = ZonedDateTime.Add(before, Duration.OneDay);
-            ZonedDateTime afterOperator = before + Duration.OneDay;
+            ZonedDateTime afterAdd = ZonedDateTime.Add(before, Duration.OneStandardDay);
+            ZonedDateTime afterOperator = before + Duration.OneStandardDay;
 
             Assert.AreEqual(afterExpected, afterAdd);
             Assert.AreEqual(afterExpected, afterOperator);
@@ -75,34 +76,9 @@ namespace NodaTime.Test
         [Test]
         public void Add_MethodEquivalents()
         {
-            const int minutes = 23;
-            const int hours = 3;
-            const int milliseconds = 40000;
-            const long seconds = 321;
-            const long nanoseconds = 12345;
-            const long ticks = 5432112345;
-
             ZonedDateTime before = SampleZone.AtStrictly(new LocalDateTime(2011, 6, 12, 15, 0));
-            Assert.AreEqual(before + Duration.OneDay, ZonedDateTime.Add(before, Duration.OneDay));
-            Assert.AreEqual(before + Duration.OneDay, before.Plus(Duration.OneDay));
-            
-            Assert.AreEqual(before + Duration.FromHours(hours), before.PlusHours(hours));
-            Assert.AreEqual(before + Duration.FromHours(-hours), before.PlusHours(-hours));
-
-            Assert.AreEqual(before + Duration.FromMinutes(minutes), before.PlusMinutes(minutes));
-            Assert.AreEqual(before + Duration.FromMinutes(-minutes), before.PlusMinutes(-minutes));
-
-            Assert.AreEqual(before + Duration.FromSeconds(seconds), before.PlusSeconds(seconds));
-            Assert.AreEqual(before + Duration.FromSeconds(-seconds), before.PlusSeconds(-seconds));
-
-            Assert.AreEqual(before + Duration.FromMilliseconds(milliseconds), before.PlusMilliseconds(milliseconds));
-            Assert.AreEqual(before + Duration.FromMilliseconds(-milliseconds), before.PlusMilliseconds(-milliseconds));
-
-            Assert.AreEqual(before + Duration.FromTicks(ticks), before.PlusTicks(ticks));
-            Assert.AreEqual(before + Duration.FromTicks(-ticks), before.PlusTicks(-ticks));
-
-            Assert.AreEqual(before + Duration.FromNanoseconds(nanoseconds), before.PlusNanoseconds(nanoseconds));
-            Assert.AreEqual(before + Duration.FromNanoseconds(-nanoseconds), before.PlusNanoseconds(-nanoseconds));
+            Assert.AreEqual(before + Duration.OneStandardDay, ZonedDateTime.Add(before, Duration.OneStandardDay));
+            Assert.AreEqual(before + Duration.OneStandardDay, before.Plus(Duration.OneStandardDay));
         }
 
         [Test]
@@ -112,34 +88,21 @@ namespace NodaTime.Test
             ZonedDateTime after = SampleZone.AtStrictly(new LocalDateTime(2011, 6, 13, 16, 0));
             // 24 hours earlier, and it's 3pm
             ZonedDateTime beforeExpected = SampleZone.AtStrictly(new LocalDateTime(2011, 6, 12, 15, 0));
-            ZonedDateTime beforeSubtract = ZonedDateTime.Subtract(after, Duration.OneDay);
-            ZonedDateTime beforeOperator = after - Duration.OneDay;
+            ZonedDateTime beforeSubtract = ZonedDateTime.Subtract(after, Duration.OneStandardDay);
+            ZonedDateTime beforeOperator = after - Duration.OneStandardDay;
 
             Assert.AreEqual(beforeExpected, beforeSubtract);
             Assert.AreEqual(beforeExpected, beforeOperator);
         }
 
         [Test]
-        public void SubtractDuration_MethodEquivalents()
+        public void Subtract_MethodEquivalents()
         {
             ZonedDateTime after = SampleZone.AtStrictly(new LocalDateTime(2011, 6, 13, 16, 0));
-            Assert.AreEqual(after - Duration.OneDay, ZonedDateTime.Subtract(after, Duration.OneDay));
-            Assert.AreEqual(after - Duration.OneDay, after.Minus(Duration.OneDay));
+            Assert.AreEqual(after - Duration.OneStandardDay, ZonedDateTime.Subtract(after, Duration.OneStandardDay));
+            Assert.AreEqual(after - Duration.OneStandardDay, after.Minus(Duration.OneStandardDay));
         }
 
-        [Test]
-        public void Subtraction_ZonedDateTime()
-        {
-            // Test all three approaches... not bothering to check a different calendar,
-            // but we'll use two different time zones.
-            ZonedDateTime start = new LocalDateTime(2014, 08, 14, 5, 51).InUtc();
-            // Sample zone is UTC+4 at this point, so this is 14:00Z.
-            ZonedDateTime end = SampleZone.AtStrictly(new LocalDateTime(2014, 08, 14, 18, 0));
-            Duration expected = Duration.FromHours(8) + Duration.FromMinutes(9);
-            Assert.AreEqual(expected, end - start);
-            Assert.AreEqual(expected, end.Minus(start));
-            Assert.AreEqual(expected, ZonedDateTime.Subtract(end, start));
-        }
 
         [Test]
         public void WithZone()
@@ -188,79 +151,6 @@ namespace NodaTime.Test
         }
 
         [Test]
-        [TestCase(0, 30, 20)]
-        [TestCase(-1, -30, -20)]
-        [TestCase(0, 30, 55)]
-        [TestCase(-1, -30, -55)]
-        public void ToDateTimeOffset_TruncatedOffset(int hours, int minutes, int seconds)
-        {
-            var ldt = new LocalDateTime(2017, 1, 9, 21, 45, 20);
-            var offset = Offset.FromHoursAndMinutes(hours, minutes).Plus(Offset.FromSeconds(seconds));
-            var zone = DateTimeZone.ForOffset(offset);
-            var zdt = ldt.InZoneStrictly(zone);
-            var dto = zdt.ToDateTimeOffset();
-            // We preserve the local date/time, so the instant will move forward as the offset
-            // is truncated.
-            Assert.AreEqual(new DateTime(2017, 1, 9, 21, 45, 20, DateTimeKind.Unspecified), dto.DateTime);
-            Assert.AreEqual(TimeSpan.FromHours(hours) + TimeSpan.FromMinutes(minutes), dto.Offset);
-        }
-
-        [Test]
-        [TestCase(-15)]
-        [TestCase(15)]
-        public void ToDateTimeOffset_OffsetOutOfRange(int hours)
-        {
-            var ldt = new LocalDateTime(2017, 1, 9, 21, 45, 20);
-            var offset = Offset.FromHours(hours);
-            var zone = DateTimeZone.ForOffset(offset);
-            var zdt = ldt.InZoneStrictly(zone);
-            Assert.Throws<InvalidOperationException>(() => zdt.ToDateTimeOffset());
-        }
-
-        [Test]
-        [TestCase(-14)]
-        [TestCase(14)]
-        public void ToDateTimeOffset_OffsetEdgeOfRange(int hours)
-        {
-            var ldt = new LocalDateTime(2017, 1, 9, 21, 45, 20);
-            var offset = Offset.FromHours(hours);
-            var zone = DateTimeZone.ForOffset(offset);
-            var zdt = ldt.InZoneStrictly(zone);
-            Assert.AreEqual(hours, zdt.ToDateTimeOffset().Offset.TotalHours);
-        }
-
-        [Test]
-        public void ToBclTypes_DateOutOfRange()
-        {
-            // One day before 1st January, 1AD (which is DateTime.MinValue)
-            var offset = Offset.FromHours(1);
-            var zone = DateTimeZone.ForOffset(offset);
-            var odt = new LocalDate(1, 1, 1).PlusDays(-1).AtMidnight().InZoneStrictly(zone);
-            Assert.Throws<InvalidOperationException>(() => odt.ToDateTimeOffset());
-            Assert.Throws<InvalidOperationException>(() => odt.ToDateTimeUnspecified());
-            Assert.Throws<InvalidOperationException>(() => odt.ToDateTimeUtc());
-        }
-
-        [Test]
-        [TestCase(100)]
-        [TestCase(1900)]
-        [TestCase(2900)]
-        public void ToBclTypes_TruncateNanosTowardStartOfTime(int year)
-        {
-            var zone = DateTimeZone.ForOffset(Offset.FromHours(1));
-            var zdt = new LocalDateTime(year, 1, 1, 13, 15, 55).PlusNanoseconds(NodaConstants.NanosecondsPerSecond - 1)
-                .InZoneStrictly(zone);
-            var expectedDateTimeUtc = new DateTime(year, 1, 1, 12, 15, 55, DateTimeKind.Utc)
-                .AddTicks(NodaConstants.TicksPerSecond - 1);
-            var actualDateTimeUtc = zdt.ToDateTimeUtc();
-            Assert.AreEqual(expectedDateTimeUtc, actualDateTimeUtc);
-            var expectedDateTimeOffset = new DateTimeOffset(year, 1, 1, 13, 15, 55, TimeSpan.FromHours(1))
-                .AddTicks(NodaConstants.TicksPerSecond - 1);
-            var actualDateTimeOffset = zdt.ToDateTimeOffset();
-            Assert.AreEqual(expectedDateTimeOffset, actualDateTimeOffset);
-        }
-
-        [Test]
         public void ToDateTimeUtc()
         {
             ZonedDateTime zoned = SampleZone.AtStrictly(new LocalDateTime(2011, 3, 5, 1, 0, 0));
@@ -270,20 +160,8 @@ namespace NodaTime.Test
             Assert.AreEqual(expected, actual);
             // Kind isn't checked by Equals...
             Assert.AreEqual(DateTimeKind.Utc, actual.Kind);
-        }
 
-        [Test]
-        public void ToDateTimeUtc_InRangeAfterUtcAdjustment()
-        {
-            var zone = DateTimeZone.ForOffset(Offset.FromHours(-1));
-            var zdt = new LocalDateTime(0, 12, 31, 23, 30).InZoneStrictly(zone);
-            // Sanity check: without reversing the offset, we're out of range
-            Assert.Throws<InvalidOperationException>(() => zdt.ToDateTimeUnspecified());
-            Assert.Throws<InvalidOperationException>(() => zdt.ToDateTimeOffset());
-            var expected = new DateTime(1, 1, 1, 0, 30, 0, DateTimeKind.Utc);
-            var actual = zdt.ToDateTimeUtc();
-            Assert.AreEqual(expected, actual);
-        }        
+        }
 
         [Test]
         public void ToDateTimeUnspecified()
@@ -330,16 +208,191 @@ namespace NodaTime.Test
             Assert.AreNotEqual(sample, zone.MapLocal(new LocalDateTime(2011, 6, 13, 1, 29)).First());
 
             // Different calendar
-            var withOtherCalendar = zone.MapLocal(new LocalDateTime(2011, 6, 13, 1, 30, CalendarSystem.Gregorian)).First();
+            var withOtherCalendar = zone.MapLocal(new LocalDateTime(2011, 6, 13, 1, 30, CalendarSystem.GetGregorianCalendar(4))).First();
             Assert.AreNotEqual(sample, withOtherCalendar);
+        }
+
+        [Test]
+        public void ComparisonOperators_SameCalendarAndZone()
+        {
+            ZonedDateTime value1 = SampleZone.AtStrictly(new LocalDateTime(2011, 1, 2, 10, 30, 0));
+            ZonedDateTime value2 = SampleZone.AtStrictly(new LocalDateTime(2011, 1, 2, 10, 30, 0));
+            ZonedDateTime value3 = SampleZone.AtStrictly(new LocalDateTime(2011, 1, 2, 10, 45, 0));
+
+            Assert.IsFalse(value1 < value2);
+            Assert.IsTrue(value1 < value3);
+            Assert.IsFalse(value2 < value1);
+            Assert.IsFalse(value3 < value1);
+
+            Assert.IsTrue(value1 <= value2);
+            Assert.IsTrue(value1 <= value3);
+            Assert.IsTrue(value2 <= value1);
+            Assert.IsFalse(value3 <= value1);
+
+            Assert.IsFalse(value1 > value2);
+            Assert.IsFalse(value1 > value3);
+            Assert.IsFalse(value2 > value1);
+            Assert.IsTrue(value3 > value1);
+
+            Assert.IsTrue(value1 >= value2);
+            Assert.IsFalse(value1 >= value3);
+            Assert.IsTrue(value2 >= value1);
+            Assert.IsTrue(value3 >= value1);
+        }
+
+        [Test]
+        public void ComparisonOperators_DifferentCalendars_AlwaysReturnsFalse()
+        {
+            LocalDateTime value1 = new LocalDateTime(2011, 1, 2, 10, 30);
+            LocalDateTime value2 = new LocalDateTime(2011, 1, 3, 10, 30, CalendarSystem.GetJulianCalendar(4));
+
+            // All inequality comparisons return false
+            Assert.IsFalse(value1 < value2);
+            Assert.IsFalse(value1 <= value2);
+            Assert.IsFalse(value1 > value2);
+            Assert.IsFalse(value1 >= value2);
+        }
+
+        [Test]
+        public void ComparisonOperators_DifferentZones_AlwaysReturnsFalse()
+        {
+            // Note that the offsets will be the same as for SampleZone in the values we're using
+            var otherZone = new FixedDateTimeZone(SampleZone.EarlyInterval.WallOffset);
+
+            ZonedDateTime value1 = SampleZone.AtStrictly(new LocalDateTime(2011, 1, 2, 10, 30));
+            ZonedDateTime value2 = otherZone.AtStrictly(new LocalDateTime(2011, 1, 3, 10, 30));
+
+            // All inequality comparisons return false
+            Assert.IsFalse(value1 < value2);
+            Assert.IsFalse(value1 <= value2);
+            Assert.IsFalse(value1 > value2);
+            Assert.IsFalse(value1 >= value2);
+        }
+
+        [Test]
+        public void CompareTo_SameCalendarAndZone()
+        {
+            ZonedDateTime value1 = SampleZone.AtStrictly(new LocalDateTime(2011, 1, 2, 10, 30, 0));
+            ZonedDateTime value2 = SampleZone.AtStrictly(new LocalDateTime(2011, 1, 2, 10, 30, 0));
+            ZonedDateTime value3 = SampleZone.AtStrictly(new LocalDateTime(2011, 1, 2, 10, 45, 0));
+
+            Assert.That(value1.CompareTo(value2), Is.EqualTo(0));
+            Assert.That(value1.CompareTo(value3), Is.LessThan(0));
+            Assert.That(value3.CompareTo(value2), Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void CompareTo_DifferentCalendars_OnlyInstantMatters()
+        {
+            CalendarSystem islamic = CalendarSystem.GetIslamicCalendar(IslamicLeapYearPattern.Base15, IslamicEpoch.Astronomical);
+            ZonedDateTime value1 = SampleZone.AtStrictly(new LocalDateTime(2011, 1, 2, 10, 30));
+            ZonedDateTime value2 = SampleZone.AtStrictly(new LocalDateTime(1500, 1, 1, 10, 30, islamic));
+            ZonedDateTime value3 = SampleZone.AtStrictly(value1.LocalDateTime.WithCalendar(islamic));
+
+            Assert.That(value1.CompareTo(value2), Is.LessThan(0));
+            Assert.That(value2.CompareTo(value1), Is.GreaterThan(0));
+            Assert.That(value1.CompareTo(value3), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void CompareTo_DifferentZones_OnlyInstantMatters()
+        {
+            var otherZone = new FixedDateTimeZone(Offset.FromHours(-20));
+
+            ZonedDateTime value1 = SampleZone.AtStrictly(new LocalDateTime(2011, 1, 2, 10, 30));
+            // Earlier local time, but later instant
+            ZonedDateTime value2 = otherZone.AtStrictly(new LocalDateTime(2011, 1, 2, 5, 30));
+            ZonedDateTime value3 = value1.WithZone(otherZone);
+
+            Assert.That(value1.CompareTo(value2), Is.LessThan(0));
+            Assert.That(value2.CompareTo(value1), Is.GreaterThan(0));
+            Assert.That(value1.CompareTo(value3), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void IComparableCompareTo_SameCalendarAndZone()
+        {
+            ZonedDateTime value1 = SampleZone.AtStrictly(new LocalDateTime(2011, 1, 2, 10, 30, 0));
+            ZonedDateTime value2 = SampleZone.AtStrictly(new LocalDateTime(2011, 1, 2, 10, 30, 0));
+            ZonedDateTime value3 = SampleZone.AtStrictly(new LocalDateTime(2011, 1, 2, 10, 45, 0));
+
+            IComparable i_value1 = (IComparable)value1;
+            IComparable i_value3 = (IComparable)value3;
+
+            Assert.That(i_value1.CompareTo(value2), Is.EqualTo(0));
+            Assert.That(i_value1.CompareTo(value3), Is.LessThan(0));
+            Assert.That(i_value3.CompareTo(value2), Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void IComparableCompareTo_DifferentCalendars_OnlyInstantMatters()
+        {
+            CalendarSystem islamic = CalendarSystem.GetIslamicCalendar(IslamicLeapYearPattern.Base15, IslamicEpoch.Astronomical);
+            ZonedDateTime value1 = SampleZone.AtStrictly(new LocalDateTime(2011, 1, 2, 10, 30));
+            ZonedDateTime value2 = SampleZone.AtStrictly(new LocalDateTime(1500, 1, 1, 10, 30, islamic));
+            ZonedDateTime value3 = SampleZone.AtStrictly(value1.LocalDateTime.WithCalendar(islamic));
+
+            IComparable i_value1 = (IComparable)value1;
+            IComparable i_value2 = (IComparable)value2;
+
+            Assert.That(i_value1.CompareTo(value2), Is.LessThan(0));
+            Assert.That(i_value2.CompareTo(value1), Is.GreaterThan(0));
+            Assert.That(i_value1.CompareTo(value3), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void IComparableCompareTo_DifferentZones_OnlyInstantMatters()
+        {
+            var otherZone = new FixedDateTimeZone(Offset.FromHours(-20));
+
+            ZonedDateTime value1 = SampleZone.AtStrictly(new LocalDateTime(2011, 1, 2, 10, 30));
+            // Earlier local time, but later instant
+            ZonedDateTime value2 = otherZone.AtStrictly(new LocalDateTime(2011, 1, 2, 5, 30));
+            ZonedDateTime value3 = value1.WithZone(otherZone);
+
+            IComparable i_value1 = (IComparable)value1;
+            IComparable i_value2 = (IComparable)value2;
+
+            Assert.That(i_value1.CompareTo(value2), Is.LessThan(0));
+            Assert.That(i_value2.CompareTo(value1), Is.GreaterThan(0));
+            Assert.That(i_value1.CompareTo(value3), Is.EqualTo(0));
+        }
+
+        /// <summary>
+        /// IComparable.CompareTo returns a positive number for a null input.
+        /// </summary>
+        [Test]
+        public void IComparableCompareTo_Null_Positive()
+        {
+            var instance = SampleZone.AtStrictly(new LocalDateTime(2011, 1, 2, 10, 30));
+            var i_instance = (IComparable)instance;
+            object arg = null;
+            var result = i_instance.CompareTo(arg);
+            Assert.That(result, Is.GreaterThan(0));
+        }
+
+        /// <summary>
+        /// IComparable.CompareTo throws an ArgumentException for non-null arguments 
+        /// that are not a ZonedDateTime.
+        /// </summary>
+        [Test]
+        public void IComparableCompareTo_WrongType_ArgumentException()
+        {
+            var instance = SampleZone.AtStrictly(new LocalDateTime(2011, 1, 2, 10, 30));
+            var i_instance = (IComparable)instance;
+            var arg = new LocalDate(2012, 3, 6);
+            Assert.Throws<ArgumentException>(() =>
+            {
+                i_instance.CompareTo(arg);
+            });
         }
 
         [Test]
         public void Constructor_ArgumentValidation()
         {
-            Assert.Throws<ArgumentNullException>(() => new ZonedDateTime(Instant.FromUnixTimeTicks(1000), null!));
-            Assert.Throws<ArgumentNullException>(() => new ZonedDateTime(Instant.FromUnixTimeTicks(1000), null!, CalendarSystem.Iso));
-            Assert.Throws<ArgumentNullException>(() => new ZonedDateTime(Instant.FromUnixTimeTicks(1000), SampleZone, null!));
+            Assert.Throws<ArgumentNullException>(() => new ZonedDateTime(new Instant(1000), null));
+            Assert.Throws<ArgumentNullException>(() => new ZonedDateTime(new Instant(1000), null, CalendarSystem.Iso));
+            Assert.Throws<ArgumentNullException>(() => new ZonedDateTime(new Instant(1000), SampleZone, null));
         }
 
         [Test]
@@ -372,10 +425,8 @@ namespace NodaTime.Test
 
             LocalDateTime local = new LocalDateTime(2011, 6, 13, 1, 30);
             ZonedDateTime zoned = new ZonedDateTime(local, zone, zone.LateInterval.WallOffset);
-
-            // Map the local time to the later of the offsets in a way which is tested elsewhere.
-            var resolver = Resolvers.CreateMappingResolver(Resolvers.ReturnLater, Resolvers.ThrowWhenSkipped);
-            Assert.AreEqual(zoned, local.InZone(zone, resolver));
+            // Leniently will return the later instant
+            Assert.AreEqual(zoned, local.InZoneLeniently(zone));
         }
 
         [Test]
@@ -395,50 +446,78 @@ namespace NodaTime.Test
         public void DefaultConstructor()
         {
             var actual = new ZonedDateTime();
-            Assert.AreEqual(new LocalDateTime(1, 1, 1, 0, 0), actual.LocalDateTime);
+            Assert.AreEqual(NodaConstants.UnixEpoch.InUtc().LocalDateTime, actual.LocalDateTime);
             Assert.AreEqual(Offset.Zero, actual.Offset);
             Assert.AreEqual(DateTimeZone.Utc, actual.Zone);
         }
 
         [Test]
-        public void XmlSerialization_Iso()
+        public void BinarySerialization_Iso()
         {
-            XmlSerializationSettings.DateTimeZoneProvider = DateTimeZoneProviders.Tzdb;
+            DateTimeZoneProviders.Serialization = DateTimeZoneProviders.Tzdb;
             var zone = DateTimeZoneProviders.Tzdb["America/New_York"];
-            var value = new ZonedDateTime(new LocalDateTime(2013, 4, 12, 17, 53, 23).WithOffset(Offset.FromHours(-4)), zone);
-            TestHelper.AssertXmlRoundtrip(value, "<value zone=\"America/New_York\">2013-04-12T17:53:23-04</value>");
+            var value = new ZonedDateTime(new LocalDateTime(2013, 4, 12, 17, 53, 23), Offset.FromHours(-4), zone);
+            TestHelper.AssertBinaryRoundtrip(value);
         }
 
         [Test]
+        public void XmlSerialization_Iso()
+        {
+            DateTimeZoneProviders.Serialization = DateTimeZoneProviders.Tzdb;
+            var zone = DateTimeZoneProviders.Tzdb["America/New_York"];
+            var value = new ZonedDateTime(new LocalDateTime(2013, 4, 12, 17, 53, 23), Offset.FromHours(-4), zone);
+            TestHelper.AssertXmlRoundtrip(value, "<value zone=\"America/New_York\">2013-04-12T17:53:23-04</value>");
+        }
+
+#if !PCL
+        [Test]
         public void XmlSerialization_Bcl()
         {
-            DateTimeZone zone;
-            try
+            // Skip this on Mono, which will have different BCL time zones. We can't easily
+            // guess which will be available :(
+            if (!TestHelper.IsRunningOnMono)
             {
-                zone = DateTimeZoneProviders.Bcl["Eastern Standard Time"];
+                DateTimeZoneProviders.Serialization = DateTimeZoneProviders.Bcl;
+                var zone = DateTimeZoneProviders.Bcl["Eastern Standard Time"];
+                var value = new ZonedDateTime(new LocalDateTime(2013, 4, 12, 17, 53, 23), Offset.FromHours(-4), zone);
+                TestHelper.AssertXmlRoundtrip(value, "<value zone=\"Eastern Standard Time\">2013-04-12T17:53:23-04</value>");
             }
-            catch (TimeZoneNotFoundException)
-            {
-                // This may occur on Mono, for example.
-                Assert.Ignore("Test assumes existence of BCL zone with ID of Eastern Standard Time");
-                // We won't get here.
-                return;
-            }
-
-            XmlSerializationSettings.DateTimeZoneProvider = DateTimeZoneProviders.Bcl;
-            var value = new ZonedDateTime(new LocalDateTime(2013, 4, 12, 17, 53, 23).WithOffset(Offset.FromHours(-4)), zone);
-            TestHelper.AssertXmlRoundtrip(value, "<value zone=\"Eastern Standard Time\">2013-04-12T17:53:23-04</value>");
         }
+
+        [Test]
+        public void BinarySerialization_Bcl()
+        {
+            // Skip this on Mono, which will have different BCL time zones. We can't easily
+            // guess which will be available :(
+            if (!TestHelper.IsRunningOnMono)
+            {
+                DateTimeZoneProviders.Serialization = DateTimeZoneProviders.Bcl;
+                var zone = DateTimeZoneProviders.Bcl["Eastern Standard Time"];
+                var value = new ZonedDateTime(new LocalDateTime(2013, 4, 12, 17, 53, 23), Offset.FromHours(-4), zone);
+                TestHelper.AssertBinaryRoundtrip(value);
+            }
+        }
+#endif
 
         [Test]
         public void XmlSerialization_NonIso()
         {
-            XmlSerializationSettings.DateTimeZoneProvider = DateTimeZoneProviders.Tzdb;
+            DateTimeZoneProviders.Serialization = DateTimeZoneProviders.Tzdb;
             var zone = DateTimeZoneProviders.Tzdb["America/New_York"];
-            var localDateTime = new LocalDateTime(2013, 6, 12, 17, 53, 23, CalendarSystem.Julian);
-            var value = new ZonedDateTime(localDateTime.WithOffset(Offset.FromHours(-4)), zone);
+            var value = new ZonedDateTime(new LocalDateTime(2013, 6, 12, 17, 53, 23, CalendarSystem.GetJulianCalendar(3)),
+                Offset.FromHours(-4), zone);
             TestHelper.AssertXmlRoundtrip(value,
-                "<value zone=\"America/New_York\" calendar=\"Julian\">2013-06-12T17:53:23-04</value>");
+                "<value zone=\"America/New_York\" calendar=\"Julian 3\">2013-06-12T17:53:23-04</value>");
+        }
+
+        [Test]
+        public void BinarySerialization_NonIso()
+        {
+            DateTimeZoneProviders.Serialization = DateTimeZoneProviders.Tzdb;
+            var zone = DateTimeZoneProviders.Tzdb["America/New_York"];
+            var value = new ZonedDateTime(new LocalDateTime(2013, 6, 12, 17, 53, 23, CalendarSystem.GetJulianCalendar(3)),
+                Offset.FromHours(-4), zone);
+            TestHelper.AssertBinaryRoundtrip(value);
         }
 
         [Test]
@@ -448,7 +527,7 @@ namespace NodaTime.Test
         [TestCase("<value zone=\"Europe/London\">2013-04-12T17:53:23-04</value>", typeof(UnparsableValueException), Description = "Incorrect offset")]
         public void XmlSerialization_Invalid(string xml, Type expectedExceptionType)
         {
-            XmlSerializationSettings.DateTimeZoneProvider = DateTimeZoneProviders.Tzdb;
+            DateTimeZoneProviders.Serialization = DateTimeZoneProviders.Tzdb;
             TestHelper.AssertXmlInvalid<ZonedDateTime>(xml, expectedExceptionType);
         }
 
@@ -465,82 +544,7 @@ namespace NodaTime.Test
         {
             var local = new LocalDateTime(2013, 7, 23, 13, 05, 20);
             ZonedDateTime zoned = local.InZoneStrictly(SampleZone);
-            Assert.AreEqual("2013/07/23 13:05:20 Single", zoned.ToString("uuuu/MM/dd HH:mm:ss z", CultureInfo.InvariantCulture));
-        }
-
-        [Test]
-        public void LocalComparer()
-        {
-            var london = DateTimeZoneProviders.Tzdb["Europe/London"];
-            var losAngeles = DateTimeZoneProviders.Tzdb["America/Los_Angeles"];
-
-            // LA is 8 hours behind London. So the London evening occurs before the LA afternoon.
-            var londonEvening = new LocalDateTime(2014, 7, 9, 20, 32).InZoneStrictly(london);
-            var losAngelesAfternoon = new LocalDateTime(2014, 7, 9, 14, 0).InZoneStrictly(losAngeles);
-
-            // Same local time as losAngelesAfternoon
-            var londonAfternoon = losAngelesAfternoon.LocalDateTime.InZoneStrictly(london);
-
-            var londonPersian = londonEvening.LocalDateTime
-                                             .WithCalendar(CalendarSystem.PersianSimple)
-                                             .InZoneStrictly(london);
-
-            var comparer = ZonedDateTime.Comparer.Local;
-            TestHelper.TestComparerStruct(comparer, losAngelesAfternoon, londonAfternoon, londonEvening);
-            Assert.Throws<ArgumentException>(() => comparer.Compare(londonPersian, londonEvening));
-            Assert.IsFalse(comparer.Equals(londonPersian, londonEvening));
-            Assert.AreNotEqual(comparer.GetHashCode(londonPersian), comparer.GetHashCode(londonEvening));
-            Assert.IsFalse(comparer.Equals(londonAfternoon, londonEvening));
-            Assert.AreNotEqual(comparer.GetHashCode(londonAfternoon), comparer.GetHashCode(londonEvening));
-            Assert.IsTrue(comparer.Equals(londonAfternoon, losAngelesAfternoon));
-            Assert.AreEqual(comparer.GetHashCode(londonAfternoon), comparer.GetHashCode(losAngelesAfternoon));
-        }
-
-        [Test]
-        public void InstantComparer()
-        {
-            var london = DateTimeZoneProviders.Tzdb["Europe/London"];
-            var losAngeles = DateTimeZoneProviders.Tzdb["America/Los_Angeles"];
-
-            // LA is 8 hours behind London. So the London evening occurs before the LA afternoon.
-            var londonEvening = new LocalDateTime(2014, 7, 9, 20, 32).InZoneStrictly(london);
-            var losAngelesAfternoon = new LocalDateTime(2014, 7, 9, 14, 0).InZoneStrictly(losAngeles);
-
-            // Same instant as londonEvening
-            var losAngelesLunchtime = new LocalDateTime(2014, 7, 9, 12, 32).InZoneStrictly(losAngeles);
-
-            var londonPersian = londonEvening.LocalDateTime
-                                             .WithCalendar(CalendarSystem.PersianSimple)
-                                             .InZoneStrictly(london);
-
-            var comparer = ZonedDateTime.Comparer.Instant;
-            TestHelper.TestComparerStruct(comparer, londonEvening, losAngelesLunchtime, losAngelesAfternoon);
-            Assert.AreEqual(0, comparer.Compare(londonPersian, londonEvening));
-            Assert.IsTrue(comparer.Equals(londonPersian, londonEvening));
-            Assert.AreEqual(comparer.GetHashCode(londonPersian), comparer.GetHashCode(londonEvening));
-            Assert.IsTrue(comparer.Equals(losAngelesLunchtime, londonEvening));
-            Assert.AreEqual(comparer.GetHashCode(losAngelesLunchtime), comparer.GetHashCode(londonEvening));
-            Assert.IsFalse(comparer.Equals(losAngelesAfternoon, londonEvening));
-            Assert.AreNotEqual(comparer.GetHashCode(losAngelesAfternoon), comparer.GetHashCode(londonEvening));
-        }
-
-        [Test]
-        public void Deconstruction()
-        {
-            var saoPaulo = DateTimeZoneProviders.Tzdb["America/Sao_Paulo"];
-            ZonedDateTime value = new LocalDateTime(2017, 10, 15, 21, 30, 15).InZoneStrictly(saoPaulo);
-            var expectedDateTime = new LocalDateTime(2017, 10, 15, 21, 30, 15);
-            var expectedZone = saoPaulo;
-            var expectedOffset = Offset.FromHours(-2);
-
-            var (actualDateTime, actualZone, actualOffset) = value;
-
-            Assert.Multiple(() =>
-            {
-                Assert.AreEqual(expectedDateTime, actualDateTime);
-                Assert.AreEqual(expectedZone, actualZone);
-                Assert.AreEqual(expectedOffset, actualOffset);
-            });
+            Assert.AreEqual("2013/07/23 13:05:20 Single", zoned.ToString("yyyy/MM/dd HH:mm:ss z", CultureInfo.InvariantCulture));
         }
     }
 }

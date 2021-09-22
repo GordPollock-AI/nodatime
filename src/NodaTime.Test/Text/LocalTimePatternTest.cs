@@ -6,16 +6,18 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using NodaTime.Properties;
 using NodaTime.Text;
 using NodaTime.Text.Patterns;
 using NUnit.Framework;
 
 namespace NodaTime.Test.Text
 {
+    [TestFixture]
     public partial class LocalTimePatternTest : PatternTestBase<LocalTime>
     {
         private static readonly DateTime SampleDateTime = new DateTime(2000, 1, 1, 21, 13, 34, 123, DateTimeKind.Unspecified).AddTicks(4567);
-        private static readonly LocalTime SampleLocalTime = LocalTime.FromHourMinuteSecondMillisecondTick(21, 13, 34, 123, 4567);
+        private static readonly LocalTime SampleLocalTime = new LocalTime(21, 13, 34, 123, 4567);
 
         // Characters we expect to work the same in Noda Time as in the BCL.
         private const string ExpectedCharacters = "hHms.:fFtT ";
@@ -25,59 +27,49 @@ namespace NodaTime.Test.Text
         private static readonly CultureInfo NoAmOrPmCulture = CreateCustomAmPmCulture("", "");
 
         internal static readonly Data[] InvalidPatternData = {
-            new Data { Pattern = "", Message = TextErrorMessages.FormatStringEmpty },
-            new Data { Pattern = "!", Message = TextErrorMessages.UnknownStandardFormat, Parameters = {'!', typeof(LocalTime).FullName! }},
-            new Data { Pattern = "%", Message = TextErrorMessages.UnknownStandardFormat, Parameters = { '%', typeof(LocalTime).FullName! } },
-            new Data { Pattern = "\\", Message = TextErrorMessages.UnknownStandardFormat, Parameters = { '\\', typeof(LocalTime).FullName! } },
-            new Data { Pattern = "%%", Message = TextErrorMessages.PercentDoubled },
-            new Data { Pattern = "%\\", Message = TextErrorMessages.EscapeAtEndOfString },
-            new Data { Pattern = "ffffffffff", Message = TextErrorMessages.RepeatCountExceeded, Parameters = { 'f', 9 } },
-            new Data { Pattern = "FFFFFFFFFF", Message = TextErrorMessages.RepeatCountExceeded, Parameters = { 'F', 9 } },
-            new Data { Pattern = "H%", Message = TextErrorMessages.PercentAtEndOfString },
-            new Data { Pattern = "HHH", Message = TextErrorMessages.RepeatCountExceeded, Parameters = { 'H', 2 } },
-            new Data { Pattern = "mmm", Message = TextErrorMessages.RepeatCountExceeded, Parameters = { 'm', 2 } },
-            new Data { Pattern = "mmmmmmmmmmmmmmmmmmm", Message = TextErrorMessages.RepeatCountExceeded, Parameters = { 'm', 2 } },
-            new Data { Pattern = "'qwe", Message = TextErrorMessages.MissingEndQuote, Parameters = { '\'' } },
-            new Data { Pattern = "'qwe\\", Message = TextErrorMessages.EscapeAtEndOfString },
-            new Data { Pattern = "'qwe\\'", Message = TextErrorMessages.MissingEndQuote, Parameters = { '\'' } },
-            new Data { Pattern = "sss", Message = TextErrorMessages.RepeatCountExceeded, Parameters = { 's', 2 } },
-            // T isn't valid in a time pattern
-            new Data { Pattern = "1970-01-01THH:mm:ss", Message = TextErrorMessages.UnquotedLiteral, Parameters = { 'T' } }
+            new Data { Pattern = "!", Message = Messages.Parse_UnknownStandardFormat, Parameters = {'!', typeof(LocalTime).FullName}},
+            new Data { Pattern = "%", Message = Messages.Parse_UnknownStandardFormat, Parameters = { '%', typeof(LocalTime).FullName } },
+            new Data { Pattern = "\\", Message = Messages.Parse_UnknownStandardFormat, Parameters = { '\\', typeof(LocalTime).FullName } },
+            new Data { Pattern = "%%", Message = Messages.Parse_PercentDoubled },
+            new Data { Pattern = "%\\", Message = Messages.Parse_EscapeAtEndOfString },
+            new Data { Pattern = "ffffffff", Message = Messages.Parse_RepeatCountExceeded, Parameters = { 'f', 7 } },
+            new Data { Pattern = "FFFFFFFF", Message = Messages.Parse_RepeatCountExceeded, Parameters = { 'F', 7 } },
+            new Data { Pattern = "H%", Message = Messages.Parse_PercentAtEndOfString },
+            new Data { Pattern = "HHH", Message = Messages.Parse_RepeatCountExceeded, Parameters = { 'H', 2 } },
+            new Data { Pattern = "mmm", Message = Messages.Parse_RepeatCountExceeded, Parameters = { 'm', 2 } },
+            new Data { Pattern = "mmmmmmmmmmmmmmmmmmm", Message = Messages.Parse_RepeatCountExceeded, Parameters = { 'm', 2 } },
+            new Data { Pattern = "'qwe", Message = Messages.Parse_MissingEndQuote, Parameters = { '\'' } },
+            new Data { Pattern = "'qwe\\", Message = Messages.Parse_EscapeAtEndOfString },
+            new Data { Pattern = "'qwe\\'", Message = Messages.Parse_MissingEndQuote, Parameters = { '\'' } },
+            new Data { Pattern = "sss", Message = Messages.Parse_RepeatCountExceeded, Parameters = { 's', 2 } },
         };
 
         internal static Data[] ParseFailureData = {
-            new Data { Text = "17 6", Pattern = "HH h", Message = TextErrorMessages.InconsistentValues2, Parameters = {'H', 'h', typeof(LocalTime).FullName! }},
-            new Data { Text = "17 AM", Pattern = "HH tt", Message = TextErrorMessages.InconsistentValues2, Parameters = {'H', 't', typeof(LocalTime).FullName! }},
-            new Data { Text = "5 foo", Pattern = "h t", Message = TextErrorMessages.MissingAmPmDesignator},
-            new Data { Text = "04.", Pattern = "ss.FF", Message = TextErrorMessages.MismatchedNumber, Parameters = { "FF" } },
-            new Data { Text = "04.", Pattern = "ss;FF", Message = TextErrorMessages.MismatchedNumber, Parameters = { "FF" } },
-            new Data { Text = "04.", Pattern = "ss.ff", Message = TextErrorMessages.MismatchedNumber, Parameters = { "ff" } },
-            new Data { Text = "04.", Pattern = "ss;ff", Message = TextErrorMessages.MismatchedNumber, Parameters = { "ff" } },
-            new Data { Text = "04.x", Pattern = "ss.FF", Message = TextErrorMessages.MismatchedNumber, Parameters = { "FF" } },
-            new Data { Text = "04.x", Pattern = "ss;FF", Message = TextErrorMessages.MismatchedNumber, Parameters = { "FF" } },
-            new Data { Text = "04.x", Pattern = "ss.ff", Message = TextErrorMessages.MismatchedNumber, Parameters = { "ff" } },
-            new Data { Text = "04.x", Pattern = "ss;ff", Message = TextErrorMessages.MismatchedNumber, Parameters = { "ff" } },
-            new Data { Text = "05 Foo", Pattern = "HH tt", Message = TextErrorMessages.MissingAmPmDesignator }
+            new Data { Text = "17 6", Pattern = "HH h", Message = Messages.Parse_InconsistentValues2, Parameters = {'H', 'h', typeof(LocalTime).FullName}},
+            new Data { Text = "17 AM", Pattern = "HH tt", Message = Messages.Parse_InconsistentValues2, Parameters = {'H', 't', typeof(LocalTime).FullName}},
         };
 
         internal static Data[] ParseOnlyData = {
             new Data(0, 0, 0, 400) { Text = "4", Pattern = "%f", },
             new Data(0, 0, 0, 400) { Text = "4", Pattern = "%F", },
             new Data(0, 0, 0, 400) { Text = "4", Pattern = "FF", },
-            new Data(0, 0, 0, 400) { Text = "40", Pattern = "FF", },
             new Data(0, 0, 0, 400) { Text = "4", Pattern = "FFF", },
-            new Data(0, 0, 0, 400) { Text = "40", Pattern = "FFF" },
-            new Data(0, 0, 0, 400) { Text = "400", Pattern = "FFF" },
             new Data(0, 0, 0, 400) { Text = "40", Pattern = "ff", },
             new Data(0, 0, 0, 400) { Text = "400", Pattern = "fff", },
             new Data(0, 0, 0, 400) { Text = "4000", Pattern = "ffff", },
             new Data(0, 0, 0, 400) { Text = "40000", Pattern = "fffff", },
             new Data(0, 0, 0, 400) { Text = "400000", Pattern = "ffffff", },
             new Data(0, 0, 0, 400) { Text = "4000000", Pattern = "fffffff", },
+            new Data(0, 0, 0, 400) { Text = "4", Pattern = "%f", },
+            new Data(0, 0, 0, 400) { Text = "4", Pattern = "%F", },
             new Data(0, 0, 0, 450) { Text = "45", Pattern = "ff" },
             new Data(0, 0, 0, 450) { Text = "45", Pattern = "FF" },
             new Data(0, 0, 0, 450) { Text = "45", Pattern = "FFF" },
             new Data(0, 0, 0, 450) { Text = "450", Pattern = "fff" },
+            new Data(0, 0, 0, 400) { Text = "4", Pattern = "%f" },
+            new Data(0, 0, 0, 400) { Text = "4", Pattern = "%F" },
+            new Data(0, 0, 0, 450) { Text = "45", Pattern = "ff" },
+            new Data(0, 0, 0, 450) { Text = "45", Pattern = "FF" },
             new Data(0, 0, 0, 456) { Text = "456", Pattern = "fff" },
             new Data(0, 0, 0, 456) { Text = "456", Pattern = "FFF" },
 
@@ -99,12 +91,6 @@ namespace NodaTime.Test.Text
             // Parsing using the semi-colon "comma dot" specifier
             new Data(16, 05, 20, 352) { Pattern = "HH:mm:ss;fff", Text = "16:05:20,352" },
             new Data(16, 05, 20, 352) { Pattern = "HH:mm:ss;FFF", Text = "16:05:20,352" },
-
-            // Empty fractional section
-            new Data(0,0,4,0) { Text = "04", Pattern = "ssFF" },
-            new Data(0,0,4,0) { Text = "040", Pattern = "ssFF" },
-            new Data(0,0,4,0) { Text = "040", Pattern = "ssFFF" },
-            new Data(0,0,4,0) { Text = "04", Pattern = "ss.FF"},
         };
 
         internal static Data[] FormatOnlyData = {
@@ -132,7 +118,7 @@ namespace NodaTime.Test.Text
             new Data(1, 1, 1, 456) { Text = "45", Pattern = "FF" },
             new Data(1, 1, 1, 456) { Text = "456", Pattern = "fff" },
             new Data(1, 1, 1, 456) { Text = "456", Pattern = "FFF" },
-            new Data(0,0,0,0) {Text = "", Pattern = "FF" },
+
 
             new Data(5, 6, 7, 8) { Culture = Cultures.EnUs, Text = "0", Pattern = "%f" },
             new Data(5, 6, 7, 8) { Culture = Cultures.EnUs, Text = "00", Pattern = "ff" },
@@ -144,10 +130,6 @@ namespace NodaTime.Test.Text
             new Data(5, 6, 7, 8) { Culture = Cultures.EnUs, Text = "5", Pattern = "%H" },
             new Data(5, 6, 7, 8) { Culture = Cultures.EnUs, Text = "6", Pattern = "%m" },
             new Data(5, 6, 7, 8) { Culture = Cultures.EnUs, Text = "7", Pattern = "%s" },
-
-            // The subminute values are truncated for the short pattern
-            new Data(14, 15, 16) { Culture = Cultures.DotTimeSeparator, Text = "14.15", Pattern = "t" },
-            new Data(14, 15, 16) { Culture = Cultures.Invariant, Text = "14:15", Pattern = "t" },
         };
 
         internal static Data[] DefaultPatternData = {                              
@@ -165,12 +147,12 @@ namespace NodaTime.Test.Text
 
         internal static readonly Data[] TemplateValueData = {
             // Pattern specifies nothing - template value is passed through
-            new Data(LocalTime.FromHourMinuteSecondMillisecondTick(1, 2, 3, 4, 5)) { Culture = Cultures.EnUs, Text = "X", Pattern = "'X'", Template = LocalTime.FromHourMinuteSecondMillisecondTick(1, 2, 3, 4, 5) },
+            new Data(new LocalTime(1, 2, 3, 4, 5)) { Culture = Cultures.EnUs, Text = "X", Pattern = "%X", Template = new LocalTime(1, 2, 3, 4, 5) },
             // Tests for each individual field being propagated
-            new Data(LocalTime.FromHourMinuteSecondMillisecondTick(1, 6, 7, 8, 9)) { Culture = Cultures.EnUs, Text = "06:07.0080009", Pattern = "mm:ss.FFFFFFF", Template = LocalTime.FromHourMinuteSecondMillisecondTick(1, 2, 3, 4, 5) },
-            new Data(LocalTime.FromHourMinuteSecondMillisecondTick(6, 2, 7, 8, 9)) { Culture = Cultures.EnUs, Text = "06:07.0080009", Pattern = "HH:ss.FFFFFFF", Template = LocalTime.FromHourMinuteSecondMillisecondTick(1, 2, 3, 4, 5) },
-            new Data(LocalTime.FromHourMinuteSecondMillisecondTick(6, 7, 3, 8, 9)) { Culture = Cultures.EnUs, Text = "06:07.0080009", Pattern = "HH:mm.FFFFFFF", Template = LocalTime.FromHourMinuteSecondMillisecondTick(1, 2, 3, 4, 5) },
-            new Data(LocalTime.FromHourMinuteSecondMillisecondTick(6, 7, 8, 4, 5)) { Culture = Cultures.EnUs, Text = "06:07:08", Pattern = "HH:mm:ss", Template = LocalTime.FromHourMinuteSecondMillisecondTick(1, 2, 3, 4, 5) },
+            new Data(new LocalTime(1, 6, 7, 8, 9)) { Culture = Cultures.EnUs, Text = "06:07.0080009", Pattern = "mm:ss.FFFFFFF", Template = new LocalTime(1, 2, 3, 4, 5) },
+            new Data(new LocalTime(6, 2, 7, 8, 9)) { Culture = Cultures.EnUs, Text = "06:07.0080009", Pattern = "HH:ss.FFFFFFF", Template = new LocalTime(1, 2, 3, 4, 5) },
+            new Data(new LocalTime(6, 7, 3, 8, 9)) { Culture = Cultures.EnUs, Text = "06:07.0080009", Pattern = "HH:mm.FFFFFFF", Template = new LocalTime(1, 2, 3, 4, 5) },
+            new Data(new LocalTime(6, 7, 8, 4, 5)) { Culture = Cultures.EnUs, Text = "06:07:08", Pattern = "HH:mm:ss", Template = new LocalTime(1, 2, 3, 4, 5) },
 
             // Hours are tricky because of the ways they can be specified
             new Data(new LocalTime(6, 2, 3)) { Culture = Cultures.EnUs, Text = "6", Pattern = "%h", Template = new LocalTime(1, 2, 3) },
@@ -189,16 +171,14 @@ namespace NodaTime.Test.Text
         internal static readonly Data[] FormatAndParseData = {
             new Data(LocalTime.Midnight) { Culture = Cultures.EnUs, Text = ".", Pattern = "%." },
             new Data(LocalTime.Midnight) { Culture = Cultures.EnUs, Text = ":", Pattern = "%:" },
-            new Data(LocalTime.Midnight) { Culture = Cultures.DotTimeSeparator, Text = ".", Pattern = "%." },
-            new Data(LocalTime.Midnight) { Culture = Cultures.DotTimeSeparator, Text = ".", Pattern = "%:" },
+            new Data(LocalTime.Midnight) { Culture = Cultures.ItIt, Text = ".", Pattern = "%." },
+            new Data(LocalTime.Midnight) { Culture = Cultures.ItIt, Text = ".", Pattern = "%:" },
             new Data(LocalTime.Midnight) { Culture = Cultures.EnUs, Text = "H", Pattern = "\\H" },
             new Data(LocalTime.Midnight) { Culture = Cultures.EnUs, Text = "HHss", Pattern = "'HHss'" },
             new Data(0, 0, 0, 100) { Culture = Cultures.EnUs, Text = "1", Pattern = "%f" },
             new Data(0, 0, 0, 100) { Culture = Cultures.EnUs, Text = "1", Pattern = "%F" },
             new Data(0, 0, 0, 100) { Culture = Cultures.EnUs, Text = "1", Pattern = "FF" },
             new Data(0, 0, 0, 100) { Culture = Cultures.EnUs, Text = "1", Pattern = "FFF" },
-            new Data(0, 0, 0, 100) { Culture = Cultures.EnUs, Text = "100000000", Pattern = "fffffffff" },
-            new Data(0, 0, 0, 100) { Culture = Cultures.EnUs, Text = "1", Pattern = "FFFFFFFFF" },
             new Data(0, 0, 0, 120) { Culture = Cultures.EnUs, Text = "12", Pattern = "ff" },
             new Data(0, 0, 0, 120) { Culture = Cultures.EnUs, Text = "12", Pattern = "FF" },
             new Data(0, 0, 0, 120) { Culture = Cultures.EnUs, Text = "12", Pattern = "FFF" },
@@ -212,10 +192,6 @@ namespace NodaTime.Test.Text
             new Data(0, 0, 0, 123, 4560) { Culture = Cultures.EnUs, Text = "123456", Pattern = "FFFFFF" },
             new Data(0, 0, 0, 123, 4567) { Culture = Cultures.EnUs, Text = "1234567", Pattern = "fffffff" },
             new Data(0, 0, 0, 123, 4567) { Culture = Cultures.EnUs, Text = "1234567", Pattern = "FFFFFFF" },
-            new Data(0, 0, 0, 123456780L) { Culture = Cultures.EnUs, Text = "12345678", Pattern = "ffffffff" },
-            new Data(0, 0, 0, 123456780L) { Culture = Cultures.EnUs, Text = "12345678", Pattern = "FFFFFFFF" },
-            new Data(0, 0, 0, 123456789L) { Culture = Cultures.EnUs, Text = "123456789", Pattern = "fffffffff" },
-            new Data(0, 0, 0, 123456789L) { Culture = Cultures.EnUs, Text = "123456789", Pattern = "FFFFFFFFF" },
             new Data(0, 0, 0, 600) { Culture = Cultures.EnUs, Text = ".6", Pattern = ".f" },
             new Data(0, 0, 0, 600) { Culture = Cultures.EnUs, Text = ".6", Pattern = ".F" },
             new Data(0, 0, 0, 600) { Culture = Cultures.EnUs, Text = ".6", Pattern = ".FFF" }, // Elided fraction
@@ -231,9 +207,9 @@ namespace NodaTime.Test.Text
             new Data(12, 0, 0, 0) { Culture = Cultures.EnUs, Text = "12", Pattern = "%H" },
             new Data(12, 0, 0, 0) { Culture = Cultures.EnUs, Text = "12", Pattern = "HH" },
             new Data(2, 0, 0, 0) { Culture = Cultures.EnUs, Text = "2", Pattern = "%H" },
+            new Data(2, 0, 0, 0) { Culture = Cultures.EnUs, Text = "2", Pattern = "%H" },
             new Data(0, 0, 12, 340) { Culture = Cultures.EnUs, Text = "12.34", Pattern = "ss.FFF"  },
 
-            // Standard patterns
             new Data(14, 15, 16) { Culture = Cultures.EnUs, Text = "14:15:16", Pattern = "r" },
             new Data(14, 15, 16, 700) { Culture = Cultures.EnUs, Text = "14:15:16.7", Pattern = "r" },
             new Data(14, 15, 16, 780) { Culture = Cultures.EnUs, Text = "14:15:16.78", Pattern = "r" },
@@ -242,29 +218,13 @@ namespace NodaTime.Test.Text
             new Data(14, 15, 16, 789, 1200) { Culture = Cultures.EnUs, Text = "14:15:16.78912", Pattern = "r" },
             new Data(14, 15, 16, 789, 1230) { Culture = Cultures.EnUs, Text = "14:15:16.789123", Pattern = "r" },
             new Data(14, 15, 16, 789, 1234) { Culture = Cultures.EnUs, Text = "14:15:16.7891234", Pattern = "r" },
-            new Data(14, 15, 16, 700) { Culture = Cultures.DotTimeSeparator, Text = "14.15.16.7", Pattern = "r" },
-            new Data(14, 15, 16, 780) { Culture = Cultures.DotTimeSeparator, Text = "14.15.16.78", Pattern = "r" },
-            new Data(14, 15, 16, 789) { Culture = Cultures.DotTimeSeparator, Text = "14.15.16.789", Pattern = "r" },
-            new Data(14, 15, 16, 789, 1000) { Culture = Cultures.DotTimeSeparator, Text = "14.15.16.7891", Pattern = "r" },
-            new Data(14, 15, 16, 789, 1200) { Culture = Cultures.DotTimeSeparator, Text = "14.15.16.78912", Pattern = "r" },
-            new Data(14, 15, 16, 789, 1230) { Culture = Cultures.DotTimeSeparator, Text = "14.15.16.789123", Pattern = "r" },
-            new Data(14, 15, 16, 789, 1234) { Culture = Cultures.DotTimeSeparator, Text = "14.15.16.7891234", Pattern = "r" },
-            new Data(14, 15, 16, 789123456L) { Culture = Cultures.DotTimeSeparator, Text = "14.15.16.789123456", Pattern = "r" },
-
-            new Data(14, 15, 0) { Culture = Cultures.DotTimeSeparator, Text = "14.15", Pattern = "t" },
-            new Data(14, 15, 0) { Culture = Cultures.Invariant, Text = "14:15", Pattern = "t" },
-
-            new Data(14, 15, 16) { Culture = Cultures.DotTimeSeparator, Text = "14.15.16", Pattern = "T" },
-            new Data(14, 15, 16) { Culture = Cultures.Invariant, Text = "14:15:16", Pattern = "T" },
-
-            new Data(14, 15, 16, 789) { StandardPattern = LocalTimePattern.ExtendedIso, Culture = Cultures.DotTimeSeparator, Text = "14:15:16.789", Pattern = "o" },
-            new Data(14, 15, 16, 789) { StandardPattern = LocalTimePattern.ExtendedIso, Culture = Cultures.EnUs, Text = "14:15:16.789", Pattern = "o" },
-            new Data(14, 15, 16) { StandardPattern = LocalTimePattern.ExtendedIso, Culture = Cultures.Invariant, Text = "14:15:16", Pattern = "o" },
-
-            new Data(14, 15, 16, 789) { StandardPattern = LocalTimePattern.LongExtendedIso, Culture = Cultures.DotTimeSeparator, Text = "14:15:16.789000000", Pattern = "O" },
-            new Data(14, 15, 16, 789) { StandardPattern = LocalTimePattern.LongExtendedIso, Culture = Cultures.EnUs, Text = "14:15:16.789000000", Pattern = "O" },
-            new Data(14, 15, 16) { StandardPattern = LocalTimePattern.LongExtendedIso, Culture = Cultures.Invariant, Text = "14:15:16.000000000", Pattern = "O" },
-            new Data(14, 15, 16) { StandardPattern = LocalTimePattern.GeneralIso, Culture = Cultures.Invariant, Text = "14:15:16", Pattern = "HH:mm:ss" },
+            new Data(14, 15, 16, 700) { Culture = Cultures.ItIt, Text = "14.15.16.7", Pattern = "r" },
+            new Data(14, 15, 16, 780) { Culture = Cultures.ItIt, Text = "14.15.16.78", Pattern = "r" },
+            new Data(14, 15, 16, 789) { Culture = Cultures.ItIt, Text = "14.15.16.789", Pattern = "r" },
+            new Data(14, 15, 16, 789, 1000) { Culture = Cultures.ItIt, Text = "14.15.16.7891", Pattern = "r" },
+            new Data(14, 15, 16, 789, 1200) { Culture = Cultures.ItIt, Text = "14.15.16.78912", Pattern = "r" },
+            new Data(14, 15, 16, 789, 1230) { Culture = Cultures.ItIt, Text = "14.15.16.789123", Pattern = "r" },
+            new Data(14, 15, 16, 789, 1234) { Culture = Cultures.ItIt, Text = "14.15.16.7891234", Pattern = "r" },
 
             // ------------ Template value tests ----------
             // Mixtures of 12 and 24 hour times
@@ -275,16 +235,14 @@ namespace NodaTime.Test.Text
             new Data(6, 0, 0) { Culture = Cultures.EnUs, Text = "6", Pattern = "%h" },
             new Data(0, 0, 0) { Culture = Cultures.EnUs, Text = "AM", Pattern = "tt" },
             new Data(12, 0, 0) { Culture = Cultures.EnUs, Text = "PM", Pattern = "tt" },
-            new Data(0, 0, 0) { Culture = Cultures.EnUs, Text = "A", Pattern = "%t" },
-            new Data(12, 0, 0) { Culture = Cultures.EnUs, Text = "P", Pattern = "%t" },
 
             // Pattern specifies nothing - template value is passed through
-            new Data(LocalTime.FromHourMinuteSecondMillisecondTick(1, 2, 3, 4, 5)) { Culture = Cultures.EnUs, Text = "*", Pattern = "%*", Template = LocalTime.FromHourMinuteSecondMillisecondTick(1, 2, 3, 4, 5) },
+            new Data(new LocalTime(1, 2, 3, 4, 5)) { Culture = Cultures.EnUs, Text = "X", Pattern = "%X", Template = new LocalTime(1, 2, 3, 4, 5) },
             // Tests for each individual field being propagated
-            new Data(LocalTime.FromHourMinuteSecondMillisecondTick(1, 6, 7, 8, 9)) { Culture = Cultures.EnUs, Text = "06:07.0080009", Pattern = "mm:ss.FFFFFFF", Template = LocalTime.FromHourMinuteSecondMillisecondTick(1, 2, 3, 4, 5) },
-            new Data(LocalTime.FromHourMinuteSecondMillisecondTick(6, 2, 7, 8, 9)) { Culture = Cultures.EnUs, Text = "06:07.0080009", Pattern = "HH:ss.FFFFFFF", Template = LocalTime.FromHourMinuteSecondMillisecondTick(1, 2, 3, 4, 5) },
-            new Data(LocalTime.FromHourMinuteSecondMillisecondTick(6, 7, 3, 8, 9)) { Culture = Cultures.EnUs, Text = "06:07.0080009", Pattern = "HH:mm.FFFFFFF", Template = LocalTime.FromHourMinuteSecondMillisecondTick(1, 2, 3, 4, 5) },
-            new Data(LocalTime.FromHourMinuteSecondMillisecondTick(6, 7, 8, 4, 5)) { Culture = Cultures.EnUs, Text = "06:07:08", Pattern = "HH:mm:ss", Template = LocalTime.FromHourMinuteSecondMillisecondTick(1, 2, 3, 4, 5) },
+            new Data(new LocalTime(1, 6, 7, 8, 9)) { Culture = Cultures.EnUs, Text = "06:07.0080009", Pattern = "mm:ss.FFFFFFF", Template = new LocalTime(1, 2, 3, 4, 5) },
+            new Data(new LocalTime(6, 2, 7, 8, 9)) { Culture = Cultures.EnUs, Text = "06:07.0080009", Pattern = "HH:ss.FFFFFFF", Template = new LocalTime(1, 2, 3, 4, 5) },
+            new Data(new LocalTime(6, 7, 3, 8, 9)) { Culture = Cultures.EnUs, Text = "06:07.0080009", Pattern = "HH:mm.FFFFFFF", Template = new LocalTime(1, 2, 3, 4, 5) },
+            new Data(new LocalTime(6, 7, 8, 4, 5)) { Culture = Cultures.EnUs, Text = "06:07:08", Pattern = "HH:mm:ss", Template = new LocalTime(1, 2, 3, 4, 5) },
 
             // Hours are tricky because of the ways they can be specified
             new Data(new LocalTime(6, 2, 3)) { Culture = Cultures.EnUs, Text = "6", Pattern = "%h", Template = new LocalTime(1, 2, 3) },
@@ -297,7 +255,7 @@ namespace NodaTime.Test.Text
             // --------------- end of template value tests ----------------------
 
             // Only one of the AM/PM designator is present. We should still be able to work out what is meant, by the presence
-            // or absence of the non-empty one.
+            // or absense of the non-empty one.
             new Data(5, 0, 0) { Culture = AmOnlyCulture, Text = "5 am", Pattern = "h tt" },
             new Data(15, 0, 0) { Culture = AmOnlyCulture, Text = "3 ", Pattern = "h tt", Description = "Implicit PM" },
             new Data(5, 0, 0) { Culture = AmOnlyCulture, Text = "5 a", Pattern = "h t" },
@@ -320,9 +278,6 @@ namespace NodaTime.Test.Text
             new Data(16, 05, 20, 352) { Pattern = "HH:mm:ss;FFF", Text = "16:05:20.352" },
             new Data(16, 05, 20, 352) { Pattern = "HH:mm:ss;FFF 'end'", Text = "16:05:20.352 end" },
             new Data(16, 05, 20) { Pattern = "HH:mm:ss;FFF 'end'", Text = "16:05:20 end" },
-            
-            // Check handling of F after non-period.
-            new Data(16, 05, 20, 352) { Pattern = "HH:mm:ss'x'FFF", Text = "16:05:20x352" },
         };
 
         internal static IEnumerable<Data> ParseData = ParseOnlyData.Concat(FormatAndParseData);
@@ -336,36 +291,30 @@ namespace NodaTime.Test.Text
             return CultureInfo.ReadOnly(clone);
         }
 
+        // Fails on Mono: https://code.google.com/p/noda-time/issues/detail?id=98
         [Test]
-        public void ParseNull() => AssertParseNull(LocalTimePattern.ExtendedIso);
-
-        [Test]
-        [TestCaseSource(typeof(Cultures), nameof(Cultures.AllCultures))]
+        [TestCaseSource(typeof(Cultures), "AllCulturesOrEmptyOnMono")]
         public void BclLongTimePatternIsValidNodaPattern(CultureInfo culture)
         {
-            if (culture is null)
-            {
-                return;
-            }
             AssertValidNodaPattern(culture, culture.DateTimeFormat.LongTimePattern);
         }
 
         [Test]
-        [TestCaseSource(typeof(Cultures), nameof(Cultures.AllCultures))]
+        [TestCaseSource(typeof(Cultures), "AllCultures")]
         public void BclShortTimePatternIsValidNodaPattern(CultureInfo culture)
         {
             AssertValidNodaPattern(culture, culture.DateTimeFormat.ShortTimePattern);
         }
 
         [Test]
-        [TestCaseSource(typeof(Cultures), nameof(Cultures.AllCultures))]
+        [TestCaseSource(typeof(Cultures), "AllCultures")]
         public void BclLongTimePatternGivesSameResultsInNoda(CultureInfo culture)
         {
             AssertBclNodaEquality(culture, culture.DateTimeFormat.LongTimePattern);
         }
 
         [Test]
-        [TestCaseSource(typeof(Cultures), nameof(Cultures.AllCultures))]
+        [TestCaseSource(typeof(Cultures), "AllCultures")]
         public void BclShortTimePatternGivesSameResultsInNoda(CultureInfo culture)
         {
             AssertBclNodaEquality(culture, culture.DateTimeFormat.ShortTimePattern);
@@ -374,13 +323,13 @@ namespace NodaTime.Test.Text
         [Test]
         public void CreateWithInvariantCulture_NullPatternText()
         {
-            Assert.Throws<ArgumentNullException>(() => LocalTimePattern.CreateWithInvariantCulture(null!));
+            Assert.Throws<ArgumentNullException>(() => LocalTimePattern.CreateWithInvariantCulture(null));
         }
 
         [Test]
         public void Create_NullFormatInfo()
         {
-            Assert.Throws<ArgumentNullException>(() => LocalTimePattern.Create("HH", null!));
+            Assert.Throws<ArgumentNullException>(() => LocalTimePattern.Create("HH", null));
         }
 
         [Test]
@@ -388,17 +337,6 @@ namespace NodaTime.Test.Text
         {
             var pattern = LocalTimePattern.CreateWithInvariantCulture("HH");
             Assert.AreEqual(LocalTime.Midnight, pattern.TemplateValue);
-        }
-
-        [Test]
-        public void CreateWithCurrentCulture()
-        {
-            using (CultureSaver.SetCultures(Cultures.DotTimeSeparator))
-            {
-                var pattern = LocalTimePattern.CreateWithCurrentCulture("HH:mm");
-                var text = pattern.Format(new LocalTime(13, 45));   
-                Assert.AreEqual("13.45", text);
-            }
         }
 
         [Test]
@@ -412,7 +350,7 @@ namespace NodaTime.Test.Text
         private void AssertBclNodaEquality(CultureInfo culture, string patternText)
         {
             // On Mono, some general patterns include an offset at the end.
-            // https://github.com/nodatime/nodatime/issues/98
+            // https://code.google.com/p/noda-time/issues/detail?id=98
             // For the moment, ignore them.
             // TODO(V1.2): Work out what to do in such cases...
             if (patternText.EndsWith("z"))
@@ -440,7 +378,7 @@ namespace NodaTime.Test.Text
                     if (cursor.Current < '\u0080')
                     {
                         Assert.IsTrue(ExpectedCharacters.Contains(cursor.Current),
-                            $"Pattern '{pattern}' contains unquoted, unexpected characters");
+                            "Pattern '" + pattern + "' contains unquoted, unexpected characters");
                     }
                 }
             }
@@ -454,11 +392,13 @@ namespace NodaTime.Test.Text
         public sealed class Data : PatternTestData<LocalTime>
         {
             // Default to midnight
-            protected override LocalTime DefaultTemplate => LocalTime.Midnight;
+            protected override LocalTime DefaultTemplate
+            {
+                get { return LocalTime.Midnight; }
+            }
 
-            protected override string? ValuePatternText => "HH:mm:ss.FFFFFFFFF";
-
-            public Data(LocalTime value) : base(value)
+            public Data(LocalTime value)
+                : base(value)
             {
             }
 
@@ -473,23 +413,21 @@ namespace NodaTime.Test.Text
             }
 
             public Data(int hours, int minutes, int seconds, int milliseconds, int ticksWithinMillisecond)
-                : this(LocalTime.FromHourMinuteSecondMillisecondTick(hours, minutes, seconds, milliseconds, ticksWithinMillisecond))
+                : this(new LocalTime(hours, minutes, seconds, milliseconds, ticksWithinMillisecond))
             {
             }
 
-            public Data(int hours, int minutes, int seconds, long nanoOfSecond)
-                : this(new LocalTime(hours, minutes, seconds).PlusNanoseconds(nanoOfSecond))
+            public Data()
+                : this(LocalTime.Midnight)
             {
             }
 
-            public Data() : this(LocalTime.Midnight)
+            internal override IPattern<LocalTime> CreatePattern()
             {
-            }
-
-            internal override IPattern<LocalTime> CreatePattern() =>
-                LocalTimePattern.CreateWithInvariantCulture(Pattern!)
+                return LocalTimePattern.CreateWithInvariantCulture(Pattern)
                     .WithTemplateValue(Template)
                     .WithCulture(Culture);
+            }
         }
     }
 }

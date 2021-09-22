@@ -2,6 +2,7 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
+using System;
 using NodaTime.Calendars;
 using NUnit.Framework;
 
@@ -9,11 +10,24 @@ namespace NodaTime.Test
 {
     public partial class CalendarSystemTest
     {
-        private static readonly CalendarSystem CopticCalendar = CalendarSystem.Coptic;
+        private static readonly CalendarSystem CopticCalendar = CalendarSystem.GetCopticCalendar(4);
 
         // Tests using CopticCalendar as a simple example which doesn't override anything.
         [Test]
-        public void GetAbsoluteYear()
+        public void GetAbsoluteYear_NullEra()
+        {
+            Assert.Throws<ArgumentNullException>(() => CopticCalendar.GetAbsoluteYear(1, null));
+        }
+
+        [Test]
+        public void GetAbsoluteYear_InvalidEra()
+        {
+            // Coptic calendar only has the AM era.
+            Assert.Throws<ArgumentException>(() => CopticCalendar.GetAbsoluteYear(1, Era.Common));
+        }
+
+        [Test]
+        public void GetAbsoluteYear_Valid()
         {
             Assert.AreEqual(5, CopticCalendar.GetAbsoluteYear(5, Era.AnnoMartyrum));
             // Prove it's right...
@@ -24,13 +38,51 @@ namespace NodaTime.Test
         }
 
         [Test]
-        public void GetMinYearOfEra()
+        public void GetAbsoluteYear_YearTooBig()
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(() => CopticCalendar.GetAbsoluteYear(CopticCalendar.MaxYear + 1, Era.AnnoMartyrum));
+        }
+
+        [Test]
+        public void GetAbsoluteYear_YearTooSmall()
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(() => CopticCalendar.GetAbsoluteYear(0, Era.AnnoMartyrum));
+        }
+
+        [Test]
+        public void GetMinYearOfEra_NullEra()
+        {
+            Assert.Throws<ArgumentNullException>(() => CopticCalendar.GetMinYearOfEra(null));
+        }
+
+        [Test]
+        public void GetMinYearOfEra_InvalidEra()
+        {
+            // Coptic calendar only has the AM era.
+            Assert.Throws<ArgumentException>(() => CopticCalendar.GetMinYearOfEra(Era.Common));
+        }
+
+        [Test]
+        public void GetMinYearOfEra_Valid()
         {
             Assert.AreEqual(1, CopticCalendar.GetMinYearOfEra(Era.AnnoMartyrum));
         }
 
         [Test]
-        public void GetMaxYearOfEra()
+        public void GetMaxYearOfEra_NullEra()
+        {
+            Assert.Throws<ArgumentNullException>(() => CopticCalendar.GetMaxYearOfEra(null));
+        }
+
+        [Test]
+        public void GetMaxYearOfEra_InvalidEra()
+        {
+            // Coptic calendar only has the AM era.
+            Assert.Throws<ArgumentException>(() => CopticCalendar.GetMaxYearOfEra(Era.Common));
+        }
+
+        [Test]
+        public void GetMaxYearOfEra_Valid()
         {
             Assert.AreEqual(CopticCalendar.MaxYear, CopticCalendar.GetMaxYearOfEra(Era.AnnoMartyrum));
         }

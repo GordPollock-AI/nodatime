@@ -4,43 +4,48 @@
 
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using NUnit.Framework;
 
 namespace NodaTime.Test
 {
+    [TestFixture]
     public partial class CalendarSystemTest
     {
-        private static readonly IEnumerable<string> SupportedIds = CalendarSystem.Ids.ToList();
-        private static readonly List<CalendarSystem> SupportedCalendars = SupportedIds.Select(CalendarSystem.ForId).ToList();
+        internal static readonly List<CalendarSystem> AllCalendars = CalendarSystem.Ids.Select(id => CalendarSystem.ForId(id)).ToList();
 
         [Test]
-        [TestCaseSource(nameof(SupportedCalendars))]
+        [TestCaseSource("AllCalendars")]
         public void MaxDate(CalendarSystem calendar)
         {
             // Construct the largest LocalDate we can, and validate that all the properties can be fetched without
             // issues.
-            ValidateProperties(calendar, calendar.MaxDays, calendar.MaxYear);
+            int year = calendar.MaxYear;
+            int month = calendar.GetMaxMonth(year);
+            int day = calendar.GetDaysInMonth(year, month);
+            ValidateProperties(year, month, day, calendar);
         }
 
         [Test]
-        [TestCaseSource(nameof(SupportedCalendars))]
+        [TestCaseSource("AllCalendars")]
         public void MinDate(CalendarSystem calendar)
         {
             // Construct the smallest LocalDate we can, and validate that all the properties can be fetched without
             // issues.
-            ValidateProperties(calendar, calendar.MinDays, calendar.MinYear);
+            ValidateProperties(calendar.MinYear, 1, 1, calendar);
         }
 
-        private static void ValidateProperties(CalendarSystem calendar, int daysSinceEpoch, int expectedYear)
+        private static void ValidateProperties(int year, int month, int day, CalendarSystem calendar)
         {
-            var localDate = new LocalDate(daysSinceEpoch, calendar);
-            Assert.AreEqual(expectedYear, localDate.Year);
+            var localDate = new LocalDate(year, month, day, calendar);
+            Assert.AreEqual(year, localDate.Year);
+            Assert.AreEqual(month, localDate.Month);
+            Assert.AreEqual(day, localDate.Day);
 
-            foreach (var property in typeof(LocalDate).GetTypeInfo().DeclaredProperties)
+            foreach (var property in typeof(LocalDate).GetProperties())
             {
                 property.GetValue(localDate, null);
             }
         }
+
     }
 }

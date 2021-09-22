@@ -191,87 +191,40 @@ namespace NodaTime.Test
         [Test]
         public void PlusTicks_Simple()
         {
-            LocalDate date = new LocalDate(2011, 4, 2);
-            LocalTime startTime = LocalTime.FromHourMinuteSecondMillisecondTick(12, 15, 8, 300, 7500);
-            LocalTime expectedForwardTime = LocalTime.FromHourMinuteSecondMillisecondTick(12, 15, 8, 301, 1500);
-            LocalTime expectedBackwardTime = LocalTime.FromHourMinuteSecondMillisecondTick(12, 15, 8, 300, 3500);
-            Assert.AreEqual(date + expectedForwardTime, (date + startTime).PlusTicks(4000));
-            Assert.AreEqual(date + expectedBackwardTime, (date + startTime).PlusTicks(-4000));
+            LocalDateTime start = new LocalDateTime(2011, 4, 2, 12, 15, 8, 300, 7500);
+            LocalDateTime expectedForward = new LocalDateTime(2011, 4, 2, 12, 15, 8, 301, 1500);
+            LocalDateTime expectedBackward = new LocalDateTime(2011, 4, 2, 12, 15, 8, 300, 3500);
+            Assert.AreEqual(expectedForward, start.PlusTicks(4000));
+            Assert.AreEqual(expectedBackward, start.PlusTicks(-4000));
         }
 
         [Test]
         public void PlusTicks_Long()
         {
-            Assert.IsTrue(NodaConstants.TicksPerDay > int.MaxValue);
+            Assert.IsTrue(NodaConstants.TicksPerStandardDay > int.MaxValue);
             LocalDateTime start = new LocalDateTime(2011, 4, 2, 12, 15, 8);
             LocalDateTime expectedForward = new LocalDateTime(2011, 4, 3, 12, 15, 8);
             LocalDateTime expectedBackward = new LocalDateTime(2011, 4, 1, 12, 15, 8);
-            Assert.AreEqual(expectedForward, start.PlusTicks(NodaConstants.TicksPerDay));
-            Assert.AreEqual(expectedBackward, start.PlusTicks(-NodaConstants.TicksPerDay));
-        }
-
-        [Test]
-        public void PlusNanoseconds_Simple()
-        {
-            // Just use the ticks values
-            LocalDate date = new LocalDate(2011, 4, 2);
-            LocalTime startTime = LocalTime.FromHourMinuteSecondMillisecondTick(12, 15, 8, 300, 7500);
-            LocalTime expectedForwardTime = LocalTime.FromHourMinuteSecondMillisecondTick(12, 15, 8, 300, 7540);
-            LocalTime expectedBackwardTime = LocalTime.FromHourMinuteSecondMillisecondTick(12, 15, 8, 300, 7460);
-            Assert.AreEqual(date + expectedForwardTime, (date + startTime).PlusNanoseconds(4000));
-            Assert.AreEqual(date + expectedBackwardTime, (date + startTime).PlusNanoseconds(-4000));
-        }
-
-        [Test]
-        public void PlusTicks_CrossingDay()
-        {
-            LocalDateTime start = new LocalDateTime(2011, 4, 2, 12, 15, 8);
-            LocalDateTime expectedForward = new LocalDateTime(2011, 4, 3, 12, 15, 8);
-            LocalDateTime expectedBackward = new LocalDateTime(2011, 4, 1, 12, 15, 8);
-            Assert.AreEqual(expectedForward, start.PlusNanoseconds(NodaConstants.NanosecondsPerDay));
-            Assert.AreEqual(expectedBackward, start.PlusNanoseconds(-NodaConstants.NanosecondsPerDay));
-        }
-
-        [Test]
-        public void Plus_FullPeriod()
-        {
-            // Period deliberately chosen to require date rollover
-            LocalDateTime start = new LocalDateTime(2011, 4, 2, 12, 15, 8);
-            var period = new PeriodBuilder { Years = 1, Months = 2, Weeks = 3, Days = 4, Hours = 15, Minutes = 6,
-                                             Seconds = 7, Milliseconds = 8, Ticks = 9, Nanoseconds = 11 }.Build();
-            var actual = start.Plus(period);
-            var expected = new LocalDateTime(2012, 6, 28, 3, 21, 15).PlusNanoseconds(8000911);
-            Assert.AreEqual(expected, actual, $"{expected:uuuu-MM-dd HH:mm:ss.fffffffff} != {actual:uuuu-MM-dd HH:mm:ss.fffffffff}");
-        }
-
-        [Test]
-        public void Minus_FullPeriod()
-        {
-            // Period deliberately chosen to require date rollover
-            LocalDateTime start = new LocalDateTime(2011, 4, 2, 12, 15, 8);
-            var period = new PeriodBuilder { Years = 1, Months = 2, Weeks = 3, Days = 4, Hours = 15, Minutes = 6,
-                                             Seconds = 7, Milliseconds = 8, Ticks = 9, Nanoseconds = 11 }.Build();
-            var actual = start.Minus(period);
-            var expected = new LocalDateTime(2010, 1, 7, 21, 9, 0).PlusNanoseconds(991999089L);
-            Assert.AreEqual(expected, actual, $"{expected:uuuu-MM-dd HH:mm:ss.fffffffff} != {actual:uuuu-MM-dd HH:mm:ss.fffffffff}");
+            Assert.AreEqual(expectedForward, start.PlusTicks(NodaConstants.TicksPerStandardDay));
+            Assert.AreEqual(expectedBackward, start.PlusTicks(-NodaConstants.TicksPerStandardDay));
         }
 
         // Each test case gives a day-of-month in November 2011 and a target "next day of week";
         // the result is the next day-of-month in November 2011 with that target day.
         // The tests are picked somewhat arbitrarily...
-        [TestCase(10, IsoDayOfWeek.Wednesday, ExpectedResult = 16)]
-        [TestCase(10, IsoDayOfWeek.Friday, ExpectedResult = 11)]
-        [TestCase(10, IsoDayOfWeek.Thursday, ExpectedResult = 17)]
-        [TestCase(11, IsoDayOfWeek.Wednesday, ExpectedResult = 16)]
-        [TestCase(11, IsoDayOfWeek.Thursday, ExpectedResult = 17)]
-        [TestCase(11, IsoDayOfWeek.Friday, ExpectedResult = 18)]
-        [TestCase(11, IsoDayOfWeek.Saturday, ExpectedResult = 12)]
-        [TestCase(11, IsoDayOfWeek.Sunday, ExpectedResult = 13)]
-        [TestCase(12, IsoDayOfWeek.Friday, ExpectedResult = 18)]
-        [TestCase(13, IsoDayOfWeek.Friday, ExpectedResult = 18)]
+        [TestCase(10, IsoDayOfWeek.Wednesday, Result = 16)]
+        [TestCase(10, IsoDayOfWeek.Friday, Result = 11)]
+        [TestCase(10, IsoDayOfWeek.Thursday, Result = 17)]
+        [TestCase(11, IsoDayOfWeek.Wednesday, Result = 16)]
+        [TestCase(11, IsoDayOfWeek.Thursday, Result = 17)]
+        [TestCase(11, IsoDayOfWeek.Friday, Result = 18)]
+        [TestCase(11, IsoDayOfWeek.Saturday, Result = 12)]
+        [TestCase(11, IsoDayOfWeek.Sunday, Result = 13)]
+        [TestCase(12, IsoDayOfWeek.Friday, Result = 18)]
+        [TestCase(13, IsoDayOfWeek.Friday, Result = 18)]
         public int Next(int dayOfMonth, IsoDayOfWeek targetDayOfWeek)
         {
-            LocalDateTime start = new LocalDateTime(2011, 11, dayOfMonth, 15, 25, 30).PlusNanoseconds(123456789);
+            LocalDateTime start = new LocalDateTime(2011, 11, dayOfMonth, 15, 25, 30, 100, 5000);
             LocalDateTime target = start.Next(targetDayOfWeek);
             Assert.AreEqual(2011, target.Year);
             Assert.AreEqual(11, target.Month);
@@ -284,25 +237,25 @@ namespace NodaTime.Test
         [TestCase(8)]
         public void Next_InvalidArgument(IsoDayOfWeek targetDayOfWeek)
         {
-            LocalDateTime start = new LocalDateTime(2011, 1, 1, 15, 25, 30).PlusNanoseconds(123456789);
+            LocalDateTime start = new LocalDateTime(2011, 1, 1, 15, 25, 30, 100, 5000);
             Assert.Throws<ArgumentOutOfRangeException>(() => start.Next(targetDayOfWeek));
         }
 
         // Each test case gives a day-of-month in November 2011 and a target "next day of week";
         // the result is the next day-of-month in November 2011 with that target day.
-        [TestCase(10, IsoDayOfWeek.Wednesday, ExpectedResult = 9)]
-        [TestCase(10, IsoDayOfWeek.Friday, ExpectedResult = 4)]
-        [TestCase(10, IsoDayOfWeek.Thursday, ExpectedResult = 3)]
-        [TestCase(11, IsoDayOfWeek.Wednesday, ExpectedResult = 9)]
-        [TestCase(11, IsoDayOfWeek.Thursday, ExpectedResult = 10)]
-        [TestCase(11, IsoDayOfWeek.Friday, ExpectedResult = 4)]
-        [TestCase(11, IsoDayOfWeek.Saturday, ExpectedResult = 5)]
-        [TestCase(11, IsoDayOfWeek.Sunday, ExpectedResult = 6)]
-        [TestCase(12, IsoDayOfWeek.Friday, ExpectedResult = 11)]
-        [TestCase(13, IsoDayOfWeek.Friday, ExpectedResult = 11)]
+        [TestCase(10, IsoDayOfWeek.Wednesday, Result = 9)]
+        [TestCase(10, IsoDayOfWeek.Friday, Result = 4)]
+        [TestCase(10, IsoDayOfWeek.Thursday, Result = 3)]
+        [TestCase(11, IsoDayOfWeek.Wednesday, Result = 9)]
+        [TestCase(11, IsoDayOfWeek.Thursday, Result = 10)]
+        [TestCase(11, IsoDayOfWeek.Friday, Result = 4)]
+        [TestCase(11, IsoDayOfWeek.Saturday, Result = 5)]
+        [TestCase(11, IsoDayOfWeek.Sunday, Result = 6)]
+        [TestCase(12, IsoDayOfWeek.Friday, Result = 11)]
+        [TestCase(13, IsoDayOfWeek.Friday, Result = 11)]
         public int Previous(int dayOfMonth, IsoDayOfWeek targetDayOfWeek)
         {
-            LocalDateTime start = new LocalDateTime(2011, 11, dayOfMonth, 15, 25, 30).PlusNanoseconds(123456789);
+            LocalDateTime start = new LocalDateTime(2011, 11, dayOfMonth, 15, 25, 30, 100, 5000);
             LocalDateTime target = start.Previous(targetDayOfWeek);
             Assert.AreEqual(2011, target.Year);
             Assert.AreEqual(11, target.Month);
@@ -314,51 +267,20 @@ namespace NodaTime.Test
         [TestCase(8)]
         public void Previous_InvalidArgument(IsoDayOfWeek targetDayOfWeek)
         {
-            LocalDateTime start = new LocalDateTime(2011, 1, 1, 15, 25, 30).PlusNanoseconds(123456789);
+            LocalDateTime start = new LocalDateTime(2011, 1, 1, 15, 25, 30, 100, 5000);
             Assert.Throws<ArgumentOutOfRangeException>(() => start.Previous(targetDayOfWeek));
         }
 
         // No tests for non-ISO-day-of-week calendars as we don't have any yet.
 
-        [Test]
         public void Operator_MethodEquivalents()
         {
-            LocalDateTime start = new LocalDateTime(2011, 1, 1, 15, 25, 30).PlusNanoseconds(123456789);
+            LocalDateTime start = new LocalDateTime(2011, 1, 1, 15, 25, 30, 100, 5000);
             Period period = Period.FromHours(1) + Period.FromDays(1);
-            LocalDateTime end = start + period;
             Assert.AreEqual(start + period, LocalDateTime.Add(start, period));
             Assert.AreEqual(start + period, start.Plus(period));
             Assert.AreEqual(start - period, LocalDateTime.Subtract(start, period));
             Assert.AreEqual(start - period, start.Minus(period));
-            Assert.AreEqual(period, end - start);
-            Assert.AreEqual(period, LocalDateTime.Subtract(end, start));
-            Assert.AreEqual(period, end.Minus(start));
-        }
-
-        [Test]
-        public void With_TimeAdjuster()
-        {
-            LocalDateTime start = new LocalDateTime(2014, 6, 27, 12, 15, 8).PlusNanoseconds(123456789);
-            LocalDateTime expected = new LocalDateTime(2014, 6, 27, 12, 15, 8);
-            Assert.AreEqual(expected, start.With(TimeAdjusters.TruncateToSecond));
-        }
-
-        [Test]
-        public void With_DateAdjuster()
-        {
-            LocalDateTime start = new LocalDateTime(2014, 6, 27, 12, 5, 8).PlusNanoseconds(123456789);
-            LocalDateTime expected = new LocalDateTime(2014, 6, 30, 12, 5, 8).PlusNanoseconds(123456789);
-            Assert.AreEqual(expected, start.With(DateAdjusters.EndOfMonth));
-        }
-
-        [Test]
-        [TestCase(-9998, 1, 1, -1)]
-        [TestCase(9999, 12, 31, 24)]
-        [TestCase(1970, 1, 1, long.MaxValue)]
-        [TestCase(1970, 1, 1, long.MinValue)]
-        public void PlusHours_Overflow(int year, int month, int day, long hours)
-        {
-            TestHelper.AssertOverflow(new LocalDateTime(year, month, day, 0, 0).PlusHours, hours);
         }
     }
 }

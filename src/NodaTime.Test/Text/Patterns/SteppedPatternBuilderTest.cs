@@ -2,13 +2,10 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using System;
 using System.Text;
 using NodaTime.Globalization;
 using NodaTime.Text;
-using NodaTime.Text.Patterns;
 using NUnit.Framework;
-using System.Collections.Generic;
 
 namespace NodaTime.Test.Text.Patterns
 {
@@ -16,6 +13,7 @@ namespace NodaTime.Test.Text.Patterns
     /// Tests for SteppedPatternBuilder, often using OffsetPatternParser as this is known
     /// to use SteppedPatternBuilder.
     /// </summary>
+    [TestFixture]
     public class SteppedPatternBuilderTest
     {
         private static readonly IPartialPattern<Offset> SimpleOffsetPattern =
@@ -24,13 +22,13 @@ namespace NodaTime.Test.Text.Patterns
         [Test]
         public void ParsePartial_ValidInMiddle()
         {
-            var value = new ValueCursor("x17:30y");
+            var value = new ValueCursor("x20:30y");
             value.MoveNext();
             value.MoveNext();
             // Start already looking at the value to parse
-            Assert.AreEqual('1', value.Current);
+            Assert.AreEqual('2', value.Current);
             var result = SimpleOffsetPattern.ParsePartial(value);
-            Assert.AreEqual(Offset.FromHoursAndMinutes(17, 30), result.Value);
+            Assert.AreEqual(Offset.FromHoursAndMinutes(20, 30), result.Value);
             // Finish just after the value
             Assert.AreEqual('y', value.Current);
         }
@@ -38,19 +36,19 @@ namespace NodaTime.Test.Text.Patterns
         [Test]
         public void ParsePartial_ValidAtEnd()
         {
-            var value = new ValueCursor("x17:30");
+            var value = new ValueCursor("x20:30");
             value.MoveNext();
             value.MoveNext();
             var result = SimpleOffsetPattern.ParsePartial(value);
-            Assert.AreEqual(Offset.FromHoursAndMinutes(17, 30), result.Value);
+            Assert.AreEqual(Offset.FromHoursAndMinutes(20, 30), result.Value);
             // Finish just after the value, which in this case is at the end.
             Assert.AreEqual(TextCursor.Nul, value.Current);
         }
 
         [Test]
-        public void ParsePartial_Invalid()
+        public void Parse_Partial_Invalid()
         {
-            var value = new ValueCursor("x17:y");
+            var value = new ValueCursor("x20:y");
             value.MoveNext();
             value.MoveNext();
             var result = SimpleOffsetPattern.ParsePartial(value);
@@ -58,60 +56,12 @@ namespace NodaTime.Test.Text.Patterns
         }
 
         [Test]
-        public void FormatOnly_ParsingFails()
-        {
-            var builder = new SteppedPatternBuilder<LocalDate, SampleBucket>(
-                NodaFormatInfo.InvariantInfo, () => new SampleBucket());
-            builder.AddFormatAction((date, sb) => sb.Append("Formatted"));
-            builder.SetFormatOnly();
-            var pattern = builder.Build(LocalDate.MinIsoValue);
-
-            var value = new ValueCursor("xyz");
-            var result = pattern.ParsePartial(value);
-            Assert.AreEqual(ParseResult<LocalDate>.FormatOnlyPattern, result);
-            result = pattern.Parse("xyz");
-            Assert.AreEqual(ParseResult<LocalDate>.FormatOnlyPattern, result);
-        }
-
-        [Test]
-        public void AppendFormat()
+        public void FormatPartial()
         {
             var builder = new StringBuilder("x");
-            var offset = Offset.FromHoursAndMinutes(17, 30);
-            SimpleOffsetPattern.AppendFormat(offset, builder);
-            Assert.AreEqual("x17:30", builder.ToString());
-        }
-
-        [Test]
-        [TestCase("aBaB", true)]
-        [TestCase("aBAB", false)] // Case-sensitive
-        [TestCase("<aBaB", false)] // < is reserved
-        [TestCase("aBaB>", false)] // > is reserved
-        public void UnhandledLiteral(string text, bool valid)
-        {
-            CharacterHandler<LocalDate, SampleBucket> handler = delegate { };
-            var handlers = new Dictionary<char, CharacterHandler<LocalDate, SampleBucket>>
-            {
-                { 'a', handler },
-                { 'B', handler }
-            };
-            var builder = new SteppedPatternBuilder<LocalDate, SampleBucket>(NodaFormatInfo.InvariantInfo, () => new SampleBucket());
-            if (valid)
-            {
-                builder.ParseCustomPattern(text, handlers);
-            }
-            else
-            {
-                Assert.Throws<InvalidPatternException>(() => builder.ParseCustomPattern(text, handlers));
-            }
-        }
-
-        private class SampleBucket : ParseBucket<LocalDate>
-        {
-            internal override ParseResult<LocalDate> CalculateValue(PatternFields usedFields, string value)
-            {
-                throw new NotImplementedException();
-            }
+            var offset = Offset.FromHoursAndMinutes(20, 30);
+            SimpleOffsetPattern.FormatPartial(offset, builder);
+            Assert.AreEqual("x20:30", builder.ToString());
         }
     }
 }

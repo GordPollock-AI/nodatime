@@ -15,20 +15,21 @@ namespace NodaTime.Test.TimeZones
     /// 2010 fall transition: October 31st
     /// 2011 spring transition: March 27th
     /// </summary>
+    [TestFixture]
     public class ParisTest
     {
         // Make sure we deal with the uncached time zone
         private static readonly DateTimeZone Paris = DateTimeZoneProviders.Tzdb["Europe/Paris"].Uncached();
 
         // Until 1911, Paris was 9 minutes and 21 seconds off UTC.
-        private static readonly Offset InitialOffset = TestObjects.CreatePositiveOffset(0, 9, 21);
+        private static readonly Offset InitialOffset = TestObjects.CreatePositiveOffset(0, 9, 21, 0);
 
         [Test]
         public void FirstTransitions()
         {
             // Paris had a name change in 1891, and then moved from +0:09:21 to UTC in 1911
-            var nameChangeInstant = Instant.FromUtc(1891, 3, 15, 23, 50, 39);
-            var utcChangeInstant = Instant.FromUtc(1911, 3, 10, 23, 50, 39);
+            var nameChangeInstant = Instant.FromUtc(1891, 3, 14, 23, 51, 39);
+            var utcChangeInstant = Instant.FromUtc(1911, 3, 10, 23, 51, 39);
 
             var beforeNameChange = Paris.GetZoneInterval(nameChangeInstant - Duration.Epsilon);
             var afterNameChange = Paris.GetZoneInterval(nameChangeInstant);

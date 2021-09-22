@@ -8,6 +8,7 @@ using NUnit.Framework;
 
 namespace NodaTime.Test
 {
+    [TestFixture]
     public partial class InstantTest
     {
         [Test, Category("Formatting"), Category("Format")]
@@ -19,13 +20,13 @@ namespace NodaTime.Test
         [Test, Category("Formatting"), Category("Format")]
         public void TestToString_MinValue()
         {
-            TestToStringBase(Instant.MinValue, "-9998-01-01T00:00:00Z");
+            TestToStringBase(Instant.MinValue, InstantPattern.DefaultMinLabel);
         }
 
         [Test, Category("Formatting"), Category("Format")]
         public void TestToString_MaxValue()
         {
-            TestToStringBase(Instant.MaxValue, "9999-12-31T23:59:59Z");
+            TestToStringBase(Instant.MaxValue, InstantPattern.DefaultMaxLabel);
         }
 
         [Test, Category("Formatting"), Category("Format")]
@@ -46,13 +47,23 @@ namespace NodaTime.Test
             Assert.AreEqual(gvalue, actual);
             actual = value.ToString("g", null);
             Assert.AreEqual(gvalue, actual);
+            actual = value.ToString("n", null);
+            Assert.AreEqual(value.Ticks.ToString("N0"), actual);
+            actual = value.ToString("n", CultureInfo.InvariantCulture);
+            Assert.AreEqual(value.Ticks.ToString("N0", CultureInfo.InvariantCulture), actual);
             actual = value.ToString("g", CultureInfo.InvariantCulture);
             Assert.AreEqual(gvalue, actual);
+            actual = value.ToString("d", null);
+            Assert.AreEqual(value.Ticks.ToString("D"), actual);
 
-            actual = $"{value}";
+            actual = string.Format("{0}", value);
             Assert.AreEqual(gvalue, actual);
-            actual = $"{value:g}";
+            actual = string.Format("{0:g}", value);
             Assert.AreEqual(gvalue, actual);
+            actual = string.Format("{0:n}", value);
+            Assert.AreEqual(value.Ticks.ToString("N0"), actual);
+            actual = string.Format("{0:d}", value);
+            Assert.AreEqual(value.Ticks.ToString("D"), actual);
         }
     }
 }

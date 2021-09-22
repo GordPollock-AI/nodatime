@@ -11,6 +11,7 @@ using NUnit.Framework;
 
 namespace NodaTime.Test
 {
+    [TestFixture]
     public class PeriodBuilderTest
     {
         [Test]
@@ -25,19 +26,17 @@ namespace NodaTime.Test
                 Minutes = 5,
                 Seconds = 6,
                 Milliseconds = 7,
-                Ticks = 8,
-                Nanoseconds = 9
+                Ticks = 8
             };
-            Assert.AreEqual(0, builder[PeriodUnits.Years]);
-            Assert.AreEqual(1, builder[PeriodUnits.Months]);
-            Assert.AreEqual(2, builder[PeriodUnits.Weeks]);
-            Assert.AreEqual(3, builder[PeriodUnits.Days]);
+            Assert.AreEqual(0L, builder[PeriodUnits.Years]);
+            Assert.AreEqual(1L, builder[PeriodUnits.Months]);
+            Assert.AreEqual(2L, builder[PeriodUnits.Weeks]);
+            Assert.AreEqual(3L, builder[PeriodUnits.Days]);
             Assert.AreEqual(4L, builder[PeriodUnits.Hours]);
             Assert.AreEqual(5L, builder[PeriodUnits.Minutes]);
             Assert.AreEqual(6L, builder[PeriodUnits.Seconds]);
             Assert.AreEqual(7L, builder[PeriodUnits.Milliseconds]);
             Assert.AreEqual(8L, builder[PeriodUnits.Ticks]);
-            Assert.AreEqual(9L, builder[PeriodUnits.Nanoseconds]);
         }
 
         [Test]
@@ -145,7 +144,7 @@ namespace NodaTime.Test
             /// Use this property!
             /// </summary>
             [XmlIgnore]
-            public Period? Period { get; set; }
+            public Period Period { get; set; }
 
             /// <summary>
             /// Don't use this property! It's only present for the purposes of XML serialization.
@@ -153,18 +152,24 @@ namespace NodaTime.Test
             /// </summary>
             [XmlElement("period")]
             [EditorBrowsable(EditorBrowsableState.Never)]
-            public PeriodBuilder? PeriodBuilder
+            public PeriodBuilder PeriodBuilder
             {
-                get => Period?.ToBuilder();
-                set => Period = value?.Build();
+                get { return Period == null ? null : Period.ToBuilder(); }
+                set { Period = value == null ? null : value.Build(); }
             }
         }
 
-        private class BuilderEqualityComparer : IEqualityComparer<PeriodBuilder?>
+        private class BuilderEqualityComparer : IEqualityComparer<PeriodBuilder>
         {
-            public bool Equals(PeriodBuilder? x, PeriodBuilder? y) => Equals(x?.Build(), y?.Build());
+            public bool Equals(PeriodBuilder x, PeriodBuilder y)
+            {
+                return x.Build().Equals(y.Build());
+            }
 
-            public int GetHashCode(PeriodBuilder? obj) => obj!.Build().GetHashCode();
+            public int GetHashCode(PeriodBuilder obj)
+            {
+                return obj.Build().GetHashCode();
+            }
         }
 
         private static void Call(object ignored) {}

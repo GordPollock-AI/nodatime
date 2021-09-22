@@ -21,7 +21,7 @@ namespace NodaTime.Test.TimeZones.IO
         /// <summary>
         /// Initializes a new instance of the <see cref="DtzIoHelper" /> class.
         /// </summary>
-        private DtzIoHelper(List<string> stringPool)
+        private DtzIoHelper(IList<string> stringPool)
         {
             ioStream = new IoStream();
             Reader = new DateTimeZoneReader(ioStream.GetReadStream(), stringPool);
@@ -31,7 +31,7 @@ namespace NodaTime.Test.TimeZones.IO
 
         internal static DtzIoHelper CreateNoStringPool()
         {
-            return new DtzIoHelper(null!);
+            return new DtzIoHelper(null);
         }
 
         internal static DtzIoHelper CreateWithStringPool()
@@ -43,13 +43,13 @@ namespace NodaTime.Test.TimeZones.IO
         ///   Gets the reader.
         /// </summary>
         /// <value>The reader.</value>
-        internal IDateTimeZoneReader Reader { get; set; }
+        private IDateTimeZoneReader Reader { get; set; }
 
         /// <summary>
         ///   Gets the writer.
         /// </summary>
         /// <value>The writer.</value>
-        internal IDateTimeZoneWriter Writer { get; set; }
+        private IDateTimeZoneWriter Writer { get; set; }
 
         public void Reset()
         {

@@ -7,10 +7,10 @@ using System.Linq;
 using NodaTime.Testing.TimeZones;
 using NodaTime.TimeZones;
 using NUnit.Framework;
-using System;
 
 namespace NodaTime.Test.TimeZones
 {
+    [TestFixture]
     public class ZoneEqualityComparerTest
     {
         // Sample instants for use in tests. They're on January 1st 2000...2009, midnight UTC.
@@ -140,30 +140,6 @@ namespace NodaTime.Test.TimeZones
             AssertEqual(zone1, zone2, Instant.MinValue, Instant.MaxValue, ZoneEqualityComparer.Options.MatchNames | ZoneEqualityComparer.Options.MatchOffsetComponents | ZoneEqualityComparer.Options.MatchStartAndEndTransitions);
             // But not the exact transitions...
             AssertNotEqual(zone1, zone2, Instant.MinValue, Instant.MaxValue, ZoneEqualityComparer.Options.MatchAllTransitions);
-        }
-
-        [Test]
-        public void ReferenceComparison()
-        {
-            var comparer = ZoneEqualityComparer.ForInterval(new Interval(Instants[0], Instants[2]));
-            var zone = DateTimeZoneProviders.Tzdb["Europe/London"];
-            Assert.IsTrue(comparer.Equals(zone, zone));
-        }
-
-        [Test]
-        public void NullComparison()
-        {
-            var comparer = ZoneEqualityComparer.ForInterval(new Interval(Instants[0], Instants[2]));
-            var zone = DateTimeZoneProviders.Tzdb["Europe/London"];
-            Assert.IsFalse(comparer.Equals(zone, null));
-            Assert.IsFalse(comparer.Equals(null, zone));
-        }
-
-        [Test]
-        public void InvalidOptions()
-        {
-            var comparer = ZoneEqualityComparer.ForInterval(new Interval(Instants[0], Instants[2]));
-            Assert.Throws<ArgumentOutOfRangeException>(() => comparer.WithOptions((ZoneEqualityComparer.Options) 9999));
         }
 
         private void AssertEqual(DateTimeZone first, DateTimeZone second, 

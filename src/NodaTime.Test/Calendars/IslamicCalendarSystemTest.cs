@@ -11,11 +11,10 @@ using NUnit.Framework;
 
 namespace NodaTime.Test.Calendars
 {
+    [TestFixture]
     public class IslamicCalendarSystemTest
     {
         private static readonly CalendarSystem SampleCalendar = CalendarSystem.GetIslamicCalendar(IslamicLeapYearPattern.Base16, IslamicEpoch.Civil);
-        private static IEnumerable<IslamicEpoch> Epochs => Enum.GetValues(typeof(IslamicEpoch)).Cast<IslamicEpoch>();
-        private static IEnumerable<IslamicLeapYearPattern> LeapYearPatterns => Enum.GetValues(typeof(IslamicLeapYearPattern)).Cast<IslamicLeapYearPattern>();
 
         [Test]
         public void SampleDate1()
@@ -25,12 +24,14 @@ namespace NodaTime.Test.Calendars
 
             ldt = ldt.WithCalendar(SampleCalendar);
             Assert.AreEqual(Era.AnnoHegirae, ldt.Era);
+            Assert.AreEqual(14, ldt.CenturyOfEra);
+            Assert.AreEqual(64, ldt.YearOfCentury);
             Assert.AreEqual(1364, ldt.YearOfEra);
 
             Assert.AreEqual(1364, ldt.Year);
             Assert.AreEqual(12, ldt.Month);
             Assert.AreEqual(6, ldt.Day);
-            Assert.AreEqual(IsoDayOfWeek.Monday, ldt.DayOfWeek);
+            Assert.AreEqual(IsoDayOfWeek.Monday, ldt.IsoDayOfWeek);
             Assert.AreEqual(6 * 30 + 5 * 29 + 6, ldt.DayOfYear);
 
             Assert.AreEqual(0, ldt.Hour);
@@ -45,12 +46,14 @@ namespace NodaTime.Test.Calendars
             LocalDateTime ldt = new LocalDateTime(2005, 11, 26, 0, 0, 0, 0, CalendarSystem.Iso);
             ldt = ldt.WithCalendar(SampleCalendar);
             Assert.AreEqual(Era.AnnoHegirae, ldt.Era);
+            Assert.AreEqual(15, ldt.CenturyOfEra);
+            Assert.AreEqual(26, ldt.YearOfCentury);
             Assert.AreEqual(1426, ldt.YearOfEra);
 
             Assert.AreEqual(1426, ldt.Year);
             Assert.AreEqual(10, ldt.Month);
             Assert.AreEqual(24, ldt.Day);
-            Assert.AreEqual(IsoDayOfWeek.Saturday, ldt.DayOfWeek);
+            Assert.AreEqual(IsoDayOfWeek.Saturday, ldt.IsoDayOfWeek);
             Assert.AreEqual(5 * 30 + 4 * 29 + 24, ldt.DayOfYear);
             Assert.AreEqual(0, ldt.Hour);
             Assert.AreEqual(0, ldt.Minute);
@@ -67,7 +70,7 @@ namespace NodaTime.Test.Calendars
             Assert.AreEqual(1426, ldt.Year);
             Assert.AreEqual(12, ldt.Month);
             Assert.AreEqual(24, ldt.Day);
-            Assert.AreEqual(IsoDayOfWeek.Tuesday, ldt.DayOfWeek);
+            Assert.AreEqual(IsoDayOfWeek.Tuesday, ldt.IsoDayOfWeek);
             Assert.AreEqual(6 * 30 + 5 * 29 + 24, ldt.DayOfYear);
             Assert.AreEqual(0, ldt.Hour);
             Assert.AreEqual(0, ldt.Minute);
@@ -247,8 +250,8 @@ namespace NodaTime.Test.Calendars
         [Test]
         public void ThursdayEpoch()
         {
-            CalendarSystem thursdayEpochCalendar = CalendarSystem.IslamicBcl;
-            CalendarSystem julianCalendar = CalendarSystem.Julian;
+            CalendarSystem thursdayEpochCalendar = CalendarSystem.GetIslamicCalendar(IslamicLeapYearPattern.Base16, IslamicEpoch.Astronomical);
+            CalendarSystem julianCalendar = CalendarSystem.GetJulianCalendar(4);
 
             LocalDate thursdayEpoch = new LocalDate(1, 1, 1, thursdayEpochCalendar);
             LocalDate thursdayEpochJulian = new LocalDate(622, 7, 15, julianCalendar);
@@ -259,7 +262,7 @@ namespace NodaTime.Test.Calendars
         public void FridayEpoch()
         {
             CalendarSystem fridayEpochCalendar = CalendarSystem.GetIslamicCalendar(IslamicLeapYearPattern.Base16, IslamicEpoch.Civil);
-            CalendarSystem julianCalendar = CalendarSystem.Julian;
+            CalendarSystem julianCalendar = CalendarSystem.GetJulianCalendar(4);
 
             LocalDate fridayEpoch = new LocalDate(1, 1, 1, fridayEpochCalendar);
             LocalDate fridayEpochJulian = new LocalDate(622, 7, 16, julianCalendar);
@@ -269,10 +272,10 @@ namespace NodaTime.Test.Calendars
         [Test]
         public void BclUsesAstronomicalEpoch()
         {
-            Calendar hijri = BclCalendars.Hijri;
-            DateTime bclDirect = hijri.ToDateTime(1, 1, 1, 0, 0, 0, 0);
+            Calendar hijri = new HijriCalendar();
+            DateTime bclDirect = new DateTime(1, 1, 1, 0, 0, 0, 0, hijri, DateTimeKind.Unspecified);
 
-            CalendarSystem julianCalendar = CalendarSystem.Julian;
+            CalendarSystem julianCalendar = CalendarSystem.GetJulianCalendar(4);
             LocalDate julianIslamicEpoch = new LocalDate(622, 7, 15, julianCalendar);
             LocalDate isoIslamicEpoch = julianIslamicEpoch.WithCalendar(CalendarSystem.Iso);
             DateTime bclFromNoda = isoIslamicEpoch.AtMidnight().ToDateTimeUnspecified();
@@ -282,10 +285,10 @@ namespace NodaTime.Test.Calendars
         [Test]
         public void SampleDateBclCompatibility()
         {
-            Calendar hijri = BclCalendars.Hijri;
-            DateTime bclDirect = hijri.ToDateTime(1302, 10, 15, 0, 0, 0, 0);
+            Calendar hijri = new HijriCalendar();
+            DateTime bclDirect = new DateTime(1302, 10, 15, 0, 0, 0, 0, hijri, DateTimeKind.Unspecified);
 
-            CalendarSystem islamicCalendar = CalendarSystem.IslamicBcl;
+            CalendarSystem islamicCalendar = CalendarSystem.GetIslamicCalendar(IslamicLeapYearPattern.Base16, IslamicEpoch.Astronomical);
             LocalDate iso = new LocalDate(1302, 10, 15, islamicCalendar);
             DateTime bclFromNoda = iso.AtMidnight().ToDateTimeUnspecified();
             Assert.AreEqual(bclDirect, bclFromNoda);
@@ -294,14 +297,26 @@ namespace NodaTime.Test.Calendars
         /// <summary>
         /// This tests every day for 9000 (ISO) years, to check that it always matches the year, month and day.
         /// </summary>
-        [Test]
-        [Explicit]
-        [Category("Slow")]
+        [Test, Timeout(180000)] // Can take a long time under NCrunch.
         public void BclThroughHistory()
         {
-            var bcl = BclCalendars.Hijri;
-            var noda = CalendarSystem.IslamicBcl;
-            BclEquivalenceHelper.AssertEquivalent(bcl, noda);
+            Calendar hijri = new HijriCalendar();
+            DateTime bclDirect = new DateTime(1, 1, 1, 0, 0, 0, 0, hijri, DateTimeKind.Unspecified);
+
+            CalendarSystem islamicCalendar = CalendarSystem.GetIslamicCalendar(IslamicLeapYearPattern.Base16, IslamicEpoch.Astronomical);
+            CalendarSystem julianCalendar = CalendarSystem.GetJulianCalendar(4);
+            LocalDate julianIslamicEpoch = new LocalDate(622, 7, 15, julianCalendar);
+            LocalDate islamicDate = julianIslamicEpoch.WithCalendar(islamicCalendar);
+
+            for (int i = 0; i < 9000 * 365; i++)
+            {
+                Assert.AreEqual(bclDirect, islamicDate.AtMidnight().ToDateTimeUnspecified());
+                Assert.AreEqual(hijri.GetYear(bclDirect), islamicDate.Year, i.ToString());
+                Assert.AreEqual(hijri.GetMonth(bclDirect), islamicDate.Month);
+                Assert.AreEqual(hijri.GetDayOfMonth(bclDirect), islamicDate.Day);
+                bclDirect = hijri.AddDays(bclDirect, 1);
+                islamicDate = islamicDate.PlusDays(1);
+            }
         }
 
         [Test]
@@ -333,9 +348,9 @@ namespace NodaTime.Test.Calendars
             var set = new HashSet<CalendarSystem>();
             var ids = new HashSet<string>();
 
-            foreach (var leapYearPattern in LeapYearPatterns)
+            foreach (IslamicLeapYearPattern leapYearPattern in Enum.GetValues(typeof(IslamicLeapYearPattern)))
             {
-                foreach (var epoch in Epochs)
+                foreach (IslamicEpoch epoch in Enum.GetValues(typeof(IslamicEpoch)))
                 {
                     var calendar = CalendarSystem.GetIslamicCalendar(leapYearPattern, epoch);
                     queue.Enqueue(calendar);
@@ -345,9 +360,9 @@ namespace NodaTime.Test.Calendars
             }
 
             // Now check we get the same references again...
-            foreach (var leapYearPattern in LeapYearPatterns)
+            foreach (IslamicLeapYearPattern leapYearPattern in Enum.GetValues(typeof(IslamicLeapYearPattern)))
             {
-                foreach (var epoch in Epochs)
+                foreach (IslamicEpoch epoch in Enum.GetValues(typeof(IslamicEpoch)))
                 {
                     var oldCalendar = queue.Dequeue();
                     var newCalendar = CalendarSystem.GetIslamicCalendar(leapYearPattern, epoch);
@@ -359,10 +374,12 @@ namespace NodaTime.Test.Calendars
         [Test]
         public void GetInstance_ArgumentValidation()
         {
-            Assert.Throws<ArgumentOutOfRangeException>(() => CalendarSystem.GetIslamicCalendar(LeapYearPatterns.Min() - 1, Epochs.Min()));
-            Assert.Throws<ArgumentOutOfRangeException>(() => CalendarSystem.GetIslamicCalendar(LeapYearPatterns.Min(), Epochs.Min() - 1));
-            Assert.Throws<ArgumentOutOfRangeException>(() => CalendarSystem.GetIslamicCalendar(LeapYearPatterns.Max() + 1, Epochs.Min()));
-            Assert.Throws<ArgumentOutOfRangeException>(() => CalendarSystem.GetIslamicCalendar(LeapYearPatterns.Min(), Epochs.Max() + 1));
+            var epochs = Enum.GetValues(typeof(IslamicEpoch)).Cast<IslamicEpoch>();
+            var leapYearPatterns = Enum.GetValues(typeof(IslamicLeapYearPattern)).Cast<IslamicLeapYearPattern>();
+            Assert.Throws<ArgumentOutOfRangeException>(() => CalendarSystem.GetIslamicCalendar(leapYearPatterns.Min() - 1, epochs.Min()));
+            Assert.Throws<ArgumentOutOfRangeException>(() => CalendarSystem.GetIslamicCalendar(leapYearPatterns.Min(), epochs.Min() - 1));
+            Assert.Throws<ArgumentOutOfRangeException>(() => CalendarSystem.GetIslamicCalendar(leapYearPatterns.Max() + 1, epochs.Min()));
+            Assert.Throws<ArgumentOutOfRangeException>(() => CalendarSystem.GetIslamicCalendar(leapYearPatterns.Min(), epochs.Max() + 1));
         }
 
         [Test]
@@ -411,13 +428,6 @@ namespace NodaTime.Test.Calendars
             Assert.AreEqual(11, expectedEnd.Month);
             Assert.AreEqual(30, expectedEnd.Day);
             Assert.AreEqual(expectedEnd, start.PlusMonths(11));
-        }
-
-        [Test]
-        public void Constructor_InvalidEnumsForCoverage()
-        {
-            Assert.Throws<ArgumentOutOfRangeException>(() => new IslamicYearMonthDayCalculator(IslamicLeapYearPattern.Base15 + 100, IslamicEpoch.Astronomical));
-            Assert.Throws<ArgumentOutOfRangeException>(() => new IslamicYearMonthDayCalculator(IslamicLeapYearPattern.Base15, IslamicEpoch.Astronomical + 100));
         }
     }
 }

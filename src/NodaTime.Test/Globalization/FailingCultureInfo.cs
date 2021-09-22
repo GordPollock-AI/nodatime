@@ -8,7 +8,7 @@ using System.Globalization;
 namespace NodaTime.Test.Globalization
 {
     /// <summary>
-    /// Throws an exception if called. This forces the testing code to set or pass a valid culture in all
+    /// Throws an exception if called. This forces the testing code set or pass a valid culture in all
     /// tests. The tests cannot be guaranteed to work if the culture is not set as formatting and parsing
     /// are culture dependent.
     /// </summary>
@@ -47,9 +47,17 @@ namespace NodaTime.Test.Globalization
             }
         }
 
-        public override string Name => "Failing";
+        public override string Name
+        {
+            get
+            {
+                return "Failing";
+            }
+        }
 
-        public override object GetFormat(Type? formatType) =>
+        public override object GetFormat(Type formatType)
+        {
             throw new NotSupportedException(CultureNotSet);
+        }
     }
 }

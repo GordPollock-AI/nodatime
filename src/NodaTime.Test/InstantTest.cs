@@ -9,27 +9,48 @@ using NUnit.Framework;
 
 namespace NodaTime.Test
 {
+    [TestFixture]
     public partial class InstantTest
     {
-        private static readonly Instant one = Instant.FromUntrustedDuration(Duration.FromNanoseconds(1L));
-        private static readonly Instant threeMillion = Instant.FromUntrustedDuration(Duration.FromNanoseconds(3000000L));
-        private static readonly Instant negativeFiftyMillion = Instant.FromUntrustedDuration(Duration.FromNanoseconds(-50000000L));
+        private const long Y2002Days =
+            365 + 365 + 366 + 365 + 365 + 365 + 366 + 365 + 365 + 365 + 366 + 365 + 365 + 365 + 366 + 365 + 365 + 365 + 366 + 365 + 365 + 365 + 366 + 365 + 365 +
+            365 + 366 + 365 + 365 + 365 + 366 + 365;
+
+        private const long Y2003Days =
+            365 + 365 + 366 + 365 + 365 + 365 + 366 + 365 + 365 + 365 + 366 + 365 + 365 + 365 + 366 + 365 + 365 + 365 + 366 + 365 + 365 + 365 + 366 + 365 + 365 +
+            365 + 366 + 365 + 365 + 365 + 366 + 365 + 365;
+
+        // 2002-04-05
+        private const long TestTime1 =
+            (Y2002Days + 31L + 28L + 31L + 5L - 1L) * NodaConstants.MillisecondsPerStandardDay + 12L * NodaConstants.MillisecondsPerHour +
+            24L * NodaConstants.MillisecondsPerMinute;
+
+        // 2003-05-06
+        private const long TestTime2 =
+            (Y2003Days + 31L + 28L + 31L + 30L + 6L - 1L) * NodaConstants.MillisecondsPerStandardDay + 14L * NodaConstants.MillisecondsPerHour +
+            28L * NodaConstants.MillisecondsPerMinute;
+
+        private Instant one = new Instant(1L);
+        private readonly Instant onePrime = new Instant(1L);
+        private Instant negativeOne = new Instant(-1L);
+        private Instant threeMillion = new Instant(3000000L);
+        private Instant negativeFiftyMillion = new Instant(-50000000L);
+
+        private readonly Duration durationNegativeEpsilon = Duration.FromTicks(-1L);
+        private readonly Offset offsetOneHour = Offset.FromHours(1);
 
         [Test]
-        // Gregorian calendar: 1957-10-04
-        [TestCase(2436116.31, 1957, 9, 21, 19, 26, 24, Description = "Sample from Astronomical Algorithms 2nd Edition, chapter 7")]
-        // Gregorian calendar: 2013-01-01
-        [TestCase(2456293.520833, 2012, 12, 19, 0, 30, 0, Description = "Sample from Wikipedia")]
-        [TestCase(1842713.0, 333, 1, 27, 12, 0, 0, Description = "Another sample from Astronomical Algorithms 2nd Edition, chapter 7")]
-        [TestCase(0.0, -4712, 1, 1, 12, 0, 0, Description = "Julian epoch")]
-        public void JulianDateConversions(double julianDate, int year, int month, int day, int hour, int minute, int second)
+        public void TestInstantOperators()
         {
-            // When dealing with floating point binary data, if we're accurate to 50 milliseconds, that's fine...
-            // (0.000001 days = ~86ms, as a guide to the scale involved...)
-            Instant actual = Instant.FromJulianDate(julianDate);
-            Instant expected = new LocalDateTime(year, month, day, hour, minute, second, CalendarSystem.Julian).InUtc().ToInstant();
-            Assert.AreEqual(expected.ToUnixTimeMilliseconds(), actual.ToUnixTimeMilliseconds(), 50, "Expected {0}, was {1}", expected, actual);
-            Assert.AreEqual(julianDate, expected.ToJulianDate(), 0.000001);
+            const long diff = TestTime2 - TestTime1;
+
+            var time1 = new Instant(TestTime1);
+            var time2 = new Instant(TestTime2);
+            Duration duration = time2 - time1;
+
+            Assert.AreEqual(diff, duration.Ticks);
+            Assert.AreEqual(TestTime2, (time1 + duration).Ticks);
+            Assert.AreEqual(TestTime1, (time2 - duration).Ticks);
         }
 
         [Test]
@@ -93,105 +114,55 @@ namespace NodaTime.Test
         [Test]
         public void FromTicksSinceUnixEpoch()
         {
-            Instant instant = Instant.FromUnixTimeTicks(12345L);
-            Assert.AreEqual(12345L, instant.ToUnixTimeTicks());
-        }
-
-        [Test]
-        public void FromUnixTimeMilliseconds_Valid()
-        {
-            Instant actual = Instant.FromUnixTimeMilliseconds(12345L);
-            Instant expected = Instant.FromUnixTimeTicks(12345L * NodaConstants.TicksPerMillisecond);
+            Instant actual = Instant.FromTicksSinceUnixEpoch(12345L);
+            Instant expected = new Instant(12345L);
             Assert.AreEqual(expected, actual);
         }
 
         [Test]
-        public void FromUnixTimeMilliseconds_TooLarge()
+        public void FromMillisecondsSinceUnixEpoch_Valid()
         {
-            Assert.Throws<ArgumentOutOfRangeException>(() => Instant.FromUnixTimeMilliseconds(long.MaxValue / 100));
-        }
-
-        [Test]
-        public void FromUnixTimeMilliseconds_TooSmall()
-        {
-            Assert.Throws<ArgumentOutOfRangeException>(() => Instant.FromUnixTimeMilliseconds(long.MinValue / 100));
-        }
-
-        [Test]
-        public void FromUnixTimeSeconds_Valid()
-        {
-            Instant actual = Instant.FromUnixTimeSeconds(12345L);
-            Instant expected = Instant.FromUnixTimeTicks(12345L * NodaConstants.TicksPerSecond);
+            Instant actual = Instant.FromMillisecondsSinceUnixEpoch(12345L);
+            Instant expected = new Instant(12345L * NodaConstants.TicksPerMillisecond);
             Assert.AreEqual(expected, actual);
         }
 
         [Test]
-        public void FromUnixTimeSeconds_TooLarge()
+        public void FromMillisecondsSinceUnixEpoch_TooLarge()
         {
-            Assert.Throws<ArgumentOutOfRangeException>(() => Instant.FromUnixTimeSeconds(long.MaxValue / 1000000));
+            Assert.Throws<ArgumentOutOfRangeException>(() => Instant.FromMillisecondsSinceUnixEpoch(long.MaxValue / 100));
         }
 
         [Test]
-        public void FromUnixTimeSeconds_TooSmall()
+        public void FromMillisecondsSinceUnixEpoch_TooSmall()
         {
-            Assert.Throws<ArgumentOutOfRangeException>(() => Instant.FromUnixTimeSeconds(long.MinValue / 1000000));
+            Assert.Throws<ArgumentOutOfRangeException>(() => Instant.FromMillisecondsSinceUnixEpoch(long.MinValue / 100));
         }
 
         [Test]
-        [TestCase(-1500, -2)]
-        [TestCase(-1001, -2)]
-        [TestCase(-1000, -1)]
-        [TestCase(-999, -1)]
-        [TestCase(-500, -1)]
-        [TestCase(0, 0)]
-        [TestCase(500, 0)]
-        [TestCase(999, 0)]
-        [TestCase(1000, 1)]
-        [TestCase(1001, 1)]
-        [TestCase(1500, 1)]
-        public void ToUnixTimeSeconds(long milliseconds, int expectedSeconds)
+        public void FromSecondsSinceUnixEpoch_Valid()
         {
-            var instant = Instant.FromUnixTimeMilliseconds(milliseconds);
-            Assert.AreEqual(expectedSeconds, instant.ToUnixTimeSeconds());
+            Instant actual = Instant.FromSecondsSinceUnixEpoch(12345L);
+            Instant expected = new Instant(12345L * NodaConstants.TicksPerSecond);
+            Assert.AreEqual(expected, actual);
         }
 
         [Test]
-        [TestCase(-15000, -2)]
-        [TestCase(-10001, -2)]
-        [TestCase(-10000, -1)]
-        [TestCase(-9999, -1)]
-        [TestCase(-5000, -1)]
-        [TestCase(0, 0)]
-        [TestCase(5000, 0)]
-        [TestCase(9999, 0)]
-        [TestCase(10000, 1)]
-        [TestCase(10001, 1)]
-        [TestCase(15000, 1)]
-        public void ToUnixTimeMilliseconds(long ticks, int expectedMilliseconds)
+        public void FromSecondsSinceUnixEpoch_TooLarge()
         {
-            var instant = Instant.FromUnixTimeTicks(ticks);
-            Assert.AreEqual(expectedMilliseconds, instant.ToUnixTimeMilliseconds());
+            Assert.Throws<ArgumentOutOfRangeException>(() => Instant.FromSecondsSinceUnixEpoch(long.MaxValue / 1000000));
         }
 
         [Test]
-        public void UnixConversions_ExtremeValues()
+        public void FromSecondsSinceUnixEpoch_TooSmall()
         {
-            // Round down to a whole second to make round-tripping work.
-            var max = Instant.MaxValue - Duration.FromSeconds(1) + Duration.Epsilon;
-            Assert.AreEqual(max, Instant.FromUnixTimeSeconds(max.ToUnixTimeSeconds()));
-            Assert.AreEqual(max, Instant.FromUnixTimeMilliseconds(max.ToUnixTimeMilliseconds()));
-            Assert.AreEqual(max, Instant.FromUnixTimeTicks(max.ToUnixTimeTicks()));
-
-            var min = Instant.MinValue;
-            Assert.AreEqual(min, Instant.FromUnixTimeSeconds(min.ToUnixTimeSeconds()));
-            Assert.AreEqual(min, Instant.FromUnixTimeMilliseconds(min.ToUnixTimeMilliseconds()));
-            Assert.AreEqual(min, Instant.FromUnixTimeTicks(min.ToUnixTimeTicks()));
+            Assert.Throws<ArgumentOutOfRangeException>(() => Instant.FromSecondsSinceUnixEpoch(long.MinValue / 1000000));
         }
 
         [Test]
         public void InZoneWithCalendar()
         {
-            CalendarSystem copticCalendar = CalendarSystem.Coptic;
+            CalendarSystem copticCalendar = CalendarSystem.GetCopticCalendar(4);
             DateTimeZone london = DateTimeZoneProviders.Tzdb["Europe/London"];
             ZonedDateTime viaInstant = Instant.FromUtc(2004, 6, 9, 11, 10).InZone(london, copticCalendar);
 
@@ -204,8 +175,8 @@ namespace NodaTime.Test
         [Test]
         public void Max()
         {
-            Instant x = Instant.FromUnixTimeTicks(100);
-            Instant y = Instant.FromUnixTimeTicks(200);
+            Instant x = new Instant(100);
+            Instant y = new Instant(200);
             Assert.AreEqual(y, Instant.Max(x, y));
             Assert.AreEqual(y, Instant.Max(y, x));
             Assert.AreEqual(x, Instant.Max(x, Instant.MinValue));
@@ -217,8 +188,8 @@ namespace NodaTime.Test
         [Test]
         public void Min()
         {
-            Instant x = Instant.FromUnixTimeTicks(100);
-            Instant y = Instant.FromUnixTimeTicks(200);
+            Instant x = new Instant(100);
+            Instant y = new Instant(200);
             Assert.AreEqual(x, Instant.Min(x, y));
             Assert.AreEqual(x, Instant.Min(y, x));
             Assert.AreEqual(Instant.MinValue, Instant.Min(x, Instant.MinValue));
@@ -237,31 +208,6 @@ namespace NodaTime.Test
 
             // Kind isn't checked by Equals...
             Assert.AreEqual(DateTimeKind.Utc, actual.Kind);
-        }
-
-        // See issue 269, but now we throw a nicer exception.
-        [Test]
-        public void ToBclTypes_DateOutOfRange()
-        {
-            var instant = Instant.FromUtc(1, 1, 1, 0, 0).PlusNanoseconds(-1);
-            Assert.Throws<InvalidOperationException>(() => instant.ToDateTimeUtc());
-            Assert.Throws<InvalidOperationException>(() => instant.ToDateTimeOffset());
-        }
-
-        [Test]
-        [TestCase(100)]
-        [TestCase(1900)]
-        [TestCase(2900)]
-        public void ToBclTypes_TruncateNanosTowardStartOfTime(int year)
-        {
-            var instant = Instant.FromUtc(year, 1, 1, 13, 15, 55).PlusNanoseconds(NodaConstants.NanosecondsPerSecond - 1);
-            var expectedDateTimeUtc = new DateTime(year, 1, 1, 13, 15, 55, DateTimeKind.Unspecified)
-                .AddTicks(NodaConstants.TicksPerSecond - 1);
-            var actualDateTimeUtc = instant.ToDateTimeUtc();
-            Assert.AreEqual(expectedDateTimeUtc, actualDateTimeUtc);
-            var expectedDateTimeOffset = new DateTimeOffset(expectedDateTimeUtc, TimeSpan.Zero);
-            var actualDateTimeOffset = instant.ToDateTimeOffset();
-            Assert.AreEqual(expectedDateTimeOffset, actualDateTimeOffset);
         }
 
         [Test]
@@ -308,8 +254,8 @@ namespace NodaTime.Test
         [Test]
         public void XmlSerialization()
         {
-            var value = new LocalDateTime(2013, 4, 12, 17, 53, 23).PlusNanoseconds(123456789).InUtc().ToInstant();
-            TestHelper.AssertXmlRoundtrip(value, "<value>2013-04-12T17:53:23.123456789Z</value>");
+            var value = new LocalDateTime(2013, 4, 12, 17, 53, 23, 123, 4567).InUtc().ToInstant();
+            TestHelper.AssertXmlRoundtrip(value, "<value>2013-04-12T17:53:23.1234567Z</value>");
         }
 
         [Test]
@@ -318,149 +264,51 @@ namespace NodaTime.Test
         {
             TestHelper.AssertXmlInvalid<Instant>(xml, expectedExceptionType);
         }
-        
+
         [Test]
-        [TestCase(-101L, -2L)]
-        [TestCase(-100L, -1L)]
-        [TestCase(-99L, -1L)]
-        [TestCase(-1L, -1L)]
-        [TestCase(0L, 0L)]
-        [TestCase(99L, 0L)]
-        [TestCase(100L, 1L)]
-        [TestCase(101L, 1L)]
-        public void TicksTruncatesDown(long nanoseconds, long expectedTicks)
+        public void BinarySerialization()
         {
-            Duration nanos = Duration.FromNanoseconds(nanoseconds);
-            Instant instant = Instant.FromUntrustedDuration(nanos);
-            Assert.AreEqual(expectedTicks, instant.ToUnixTimeTicks());
+            TestHelper.AssertBinaryRoundtrip(new Instant(12345L));
+            TestHelper.AssertBinaryRoundtrip(Instant.MinValue);
+            TestHelper.AssertBinaryRoundtrip(Instant.MaxValue);
         }
 
         [Test]
-        public void IsValid()
+        [TestCase("1990-01-01T00:00:00Z", false, Description = "Before interval")]
+        [TestCase("2000-01-01T00:00:00Z", true, Description = "Start of interval")]
+        [TestCase("2010-01-01T00:00:00Z", true, Description = "Within interval")]
+        [TestCase("2020-01-01T00:00:00Z", false, Description = "End instant of interval")]
+        [TestCase("2030-01-01T00:00:00Z", false, Description = "After interval")]
+        public void Contains(string candidateText, bool expectedResult)
         {
-            Assert.IsFalse(Instant.BeforeMinValue.IsValid);
-            Assert.IsTrue(Instant.MinValue.IsValid);
-            Assert.IsTrue(Instant.MaxValue.IsValid);
-            Assert.IsFalse(Instant.AfterMaxValue.IsValid);
+            var start = Instant.FromUtc(2000, 1, 1, 0, 0);
+            var end = Instant.FromUtc(2020, 1, 1, 0, 0);
+            var interval = new Interval(start, end);
+            var candidate = InstantPattern.ExtendedIsoPattern.Parse(candidateText).Value;
+            Assert.AreEqual(expectedResult, interval.Contains(candidate));
         }
 
         [Test]
-        public void InvalidValues()
+        public void Contains_EndOfTime()
         {
-            Assert.Greater(Instant.AfterMaxValue, Instant.MaxValue);
-            Assert.Less(Instant.BeforeMinValue, Instant.MinValue);
+            var interval = new Interval(NodaConstants.UnixEpoch, Instant.MaxValue);
+            Assert.IsTrue(interval.Contains(Instant.MaxValue));
         }
 
         [Test]
-        public void PlusDuration_Overflow()
+        public void Contains_EmptyInterval()
         {
-            TestHelper.AssertOverflow(Instant.MinValue.Plus, -Duration.Epsilon);
-            TestHelper.AssertOverflow(Instant.MaxValue.Plus, Duration.Epsilon);
+            var instant = NodaConstants.UnixEpoch;
+            var interval = new Interval(instant, instant);
+            Assert.IsFalse(interval.Contains(instant));
         }
 
         [Test]
-        public void ExtremeArithmetic()
+        public void Contains_EmptyInterval_EndOfTime()
         {
-            Duration hugeAndPositive = Instant.MaxValue - Instant.MinValue;
-            Duration hugeAndNegative = Instant.MinValue - Instant.MaxValue;
-            Assert.AreEqual(hugeAndNegative, -hugeAndPositive);
-            Assert.AreEqual(Instant.MaxValue, Instant.MinValue - hugeAndNegative);
-            Assert.AreEqual(Instant.MaxValue, Instant.MinValue + hugeAndPositive);
-            Assert.AreEqual(Instant.MinValue, Instant.MaxValue + hugeAndNegative);
-            Assert.AreEqual(Instant.MinValue, Instant.MaxValue - hugeAndPositive);
-        }
-
-        [Test]
-        public void PlusOffset_Overflow()
-        {
-            TestHelper.AssertOverflow(Instant.MinValue.Plus, Offset.FromSeconds(-1));
-            TestHelper.AssertOverflow(Instant.MaxValue.Plus, Offset.FromSeconds(1));
-        }
-
-        [Test]
-        public void FromUnixTimeMilliseconds_Range()
-        {
-            long smallestValid = Instant.MinValue.ToUnixTimeTicks() / NodaConstants.TicksPerMillisecond;
-            long largestValid = Instant.MaxValue.ToUnixTimeTicks() / NodaConstants.TicksPerMillisecond;
-            TestHelper.AssertValid(Instant.FromUnixTimeMilliseconds, smallestValid);
-            TestHelper.AssertOutOfRange(Instant.FromUnixTimeMilliseconds, smallestValid - 1);
-            TestHelper.AssertValid(Instant.FromUnixTimeMilliseconds, largestValid);
-            TestHelper.AssertOutOfRange(Instant.FromUnixTimeMilliseconds, largestValid + 1);
-        }
-
-        [Test]
-        public void FromUnixTimeSeconds_Range()
-        {
-            long smallestValid = Instant.MinValue.ToUnixTimeTicks() / NodaConstants.TicksPerSecond;
-            long largestValid = Instant.MaxValue.ToUnixTimeTicks() / NodaConstants.TicksPerSecond;
-            TestHelper.AssertValid(Instant.FromUnixTimeSeconds, smallestValid);
-            TestHelper.AssertOutOfRange(Instant.FromUnixTimeSeconds, smallestValid - 1);
-            TestHelper.AssertValid(Instant.FromUnixTimeSeconds, largestValid);
-            TestHelper.AssertOutOfRange(Instant.FromUnixTimeSeconds, largestValid + 1);
-        }
-
-        [Test]
-        public void FromTicksSinceUnixEpoch_Range()
-        {
-            long smallestValid = Instant.MinValue.ToUnixTimeTicks();
-            long largestValid = Instant.MaxValue.ToUnixTimeTicks();
-            TestHelper.AssertValid(Instant.FromUnixTimeTicks, smallestValid);
-            TestHelper.AssertOutOfRange(Instant.FromUnixTimeTicks, smallestValid - 1);
-            TestHelper.AssertValid(Instant.FromUnixTimeTicks, largestValid);
-            TestHelper.AssertOutOfRange(Instant.FromUnixTimeTicks, largestValid + 1);
-        }
-
-        [Test]
-        public void PlusOffset()
-        {
-            var localInstant = NodaConstants.UnixEpoch.Plus(Offset.FromHours(1));
-            Assert.AreEqual(Duration.FromHours(1), localInstant.TimeSinceLocalEpoch);
-        }
-
-        [Test]
-        public void SafePlus_NormalTime()
-        {
-            var localInstant = NodaConstants.UnixEpoch.SafePlus(Offset.FromHours(1));
-            Assert.AreEqual(Duration.FromHours(1), localInstant.TimeSinceLocalEpoch);
-        }
-
-        [Test]
-        [TestCase(null, 0, null)]
-        [TestCase(null, 1, null)]
-        [TestCase(null, -1, null)]
-        [TestCase(1, -1, 0)]
-        [TestCase(1, -2, null)]
-        [TestCase(2, 1, 3)]
-        public void SafePlus_NearStartOfTime(int? initialOffset, int offsetToAdd, int? finalOffset)
-        {
-            var start = initialOffset is null
-                ? Instant.BeforeMinValue
-                : Instant.MinValue + Duration.FromHours(initialOffset.Value);
-            var expected = finalOffset is null
-                ? LocalInstant.BeforeMinValue
-                : Instant.MinValue.Plus(Offset.FromHours(finalOffset.Value));
-            var actual = start.SafePlus(Offset.FromHours(offsetToAdd));
-            Assert.AreEqual(expected, actual);
-        }
-
-        // A null offset indicates "AfterMaxValue". Otherwise, MaxValue.Plus(offset)
-        [Test]
-        [TestCase(null, 0, null)]
-        [TestCase(null, 1, null)]
-        [TestCase(null, -1, null)]
-        [TestCase(-1, 1, 0)]
-        [TestCase(-1, 2, null)]
-        [TestCase(-2, -1, -3)]
-        public void SafePlus_NearEndOfTime(int? initialOffset, int offsetToAdd, int? finalOffset)
-        {
-            var start = initialOffset is null
-                ? Instant.AfterMaxValue
-                : Instant.MaxValue + Duration.FromHours(initialOffset.Value);
-            var expected = finalOffset is null
-                ? LocalInstant.AfterMaxValue
-                : Instant.MaxValue.Plus(Offset.FromHours(finalOffset.Value));
-            var actual = start.SafePlus(Offset.FromHours(offsetToAdd));
-            Assert.AreEqual(expected, actual);
+            var instant = Instant.MaxValue;
+            var interval = new Interval(instant, instant);
+            Assert.IsTrue(interval.Contains(instant));
         }
     }
 }

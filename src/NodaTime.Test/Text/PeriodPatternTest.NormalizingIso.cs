@@ -4,6 +4,7 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using NodaTime.Properties;
 using NodaTime.Text;
 using NUnit.Framework;
 
@@ -11,36 +12,35 @@ namespace NodaTime.Test.Text
 {
     public static partial class PeriodPatternTest
     {
+        [TestFixture]
         public class PeriodPatternNormalizingIsoTest : PatternTestBase<Period>
         {
-            // Single null value to keep it from being "inconclusive"
-            internal static readonly Data?[] InvalidPatternData = { null };
+            internal static readonly Data[] InvalidPatternData = {};
 
             internal static readonly Data[] ParseFailureData = {
-                new Data { Text = "X5H", Message = TextErrorMessages.MismatchedCharacter, Parameters = { 'P' } },
-                new Data { Text = "", Message = TextErrorMessages.ValueStringEmpty },
-                new Data { Text = "P5J", Message = TextErrorMessages.InvalidUnitSpecifier, Parameters = { 'J' } },
-                new Data { Text = "P5D10M", Message = TextErrorMessages.MisplacedUnitSpecifier, Parameters = { 'M' } },
-                new Data { Text = "P6M5D6D", Message = TextErrorMessages.RepeatedUnitSpecifier, Parameters = { 'D' } },
-                new Data { Text = "PT5M10H", Message = TextErrorMessages.MisplacedUnitSpecifier, Parameters = { 'H' } },
-                new Data { Text = "P5H", Message = TextErrorMessages.MisplacedUnitSpecifier, Parameters = { 'H' } },
-                new Data { Text = "PT5Y", Message = TextErrorMessages.MisplacedUnitSpecifier, Parameters = { 'Y' } },
+                new Data { Text = "X5H", Message = Messages.Parse_MismatchedCharacter, Parameters = { 'P' } },
+                new Data { Text = "", Message = Messages.Parse_ValueStringEmpty },
+                new Data { Text = "P5J", Message = Messages.Parse_InvalidUnitSpecifier, Parameters = { 'J' } },
+                new Data { Text = "P5D10M", Message = Messages.Parse_MisplacedUnitSpecifier, Parameters = { 'M' } },
+                new Data { Text = "P6M5D6D", Message = Messages.Parse_RepeatedUnitSpecifier, Parameters = { 'D' } },
+                new Data { Text = "PT5M10H", Message = Messages.Parse_MisplacedUnitSpecifier, Parameters = { 'H' } },
+                new Data { Text = "P5H", Message = Messages.Parse_MisplacedUnitSpecifier, Parameters = { 'H' } },
+                new Data { Text = "PT5Y", Message = Messages.Parse_MisplacedUnitSpecifier, Parameters = { 'Y' } },
                 // Invalid in ISO.
-                new Data { Text = "P", Message = TextErrorMessages.EmptyPeriod },
-                new Data { Text = "PX", Message = TextErrorMessages.MissingNumber },
-                new Data { Text = "P10M-", Message = TextErrorMessages.EndOfString },
-                new Data { Text = "P5", Message = TextErrorMessages.EndOfString },
-                new Data { Text = "PT9223372036854775808H", Message = TextErrorMessages.ValueOutOfRange, Parameters = { "9223372036854775808", typeof(Period) } },
-                new Data { Text = "PT-9223372036854775809H", Message = TextErrorMessages.ValueOutOfRange, Parameters = { "-9223372036854775809", typeof(Period) } },
-                new Data { Text = "PT10000000000000000000H", Message = TextErrorMessages.ValueOutOfRange, Parameters = { "10000000000000000000", typeof(Period) } },
-                new Data { Text = "PT-10000000000000000000H", Message = TextErrorMessages.ValueOutOfRange, Parameters = { "-10000000000000000000", typeof(Period) } },
-                new Data { Text = "P5.5S", Message = TextErrorMessages.MisplacedUnitSpecifier, Parameters = { '.' } },
-                new Data { Text = "PT.5S", Message = TextErrorMessages.MissingNumber },
-                new Data { Text = "PT0.5X", Message = TextErrorMessages.MismatchedCharacter, Parameters = { 'S' } },
-                new Data { Text = "PT0.X", Message = TextErrorMessages.MissingNumber },
-                new Data { Text = "PT5S0.5S", Message = TextErrorMessages.MisplacedUnitSpecifier, Parameters = { '.' } },
-                new Data { Text = "PT5.", Message = TextErrorMessages.MissingNumber },
-                new Data { Text = "PT5.5SX", Message = TextErrorMessages.ExpectedEndOfString }
+                new Data { Text = "P", Message = Messages.Parse_EmptyPeriod },
+                new Data { Text = "PX", Message = Messages.Parse_MissingNumber },
+                new Data { Text = "P10M-", Message = Messages.Parse_EndOfString },
+                new Data { Text = "P5", Message = Messages.Parse_EndOfString },
+                new Data { Text = "PT9223372036854775808H", Message = Messages.Parse_ValueOutOfRange, Parameters = { "9223372036854775808", typeof(Period) } },
+                new Data { Text = "PT-9223372036854775809H", Message = Messages.Parse_ValueOutOfRange, Parameters = { "-9223372036854775809", typeof(Period) } },
+                new Data { Text = "PT10000000000000000000H", Message = Messages.Parse_ValueOutOfRange, Parameters = { "10000000000000000000", typeof(Period) } },
+                new Data { Text = "PT-10000000000000000000H", Message = Messages.Parse_ValueOutOfRange, Parameters = { "-10000000000000000000", typeof(Period) } },
+                new Data { Text = "P5.5S", Message = Messages.Parse_MisplacedUnitSpecifier, Parameters = { '.' } },
+                new Data { Text = "PT.5S", Message = Messages.Parse_MissingNumber },
+                new Data { Text = "PT0.5X", Message = Messages.Parse_MismatchedCharacter, Parameters = { 'S' } },
+                new Data { Text = "PT5S0.5S", Message = Messages.Parse_MisplacedUnitSpecifier, Parameters = { '.' } },
+                new Data { Text = "PT5.", Message = Messages.Parse_MissingNumber },
+                new Data { Text = "PT5.5SX", Message = Messages.Parse_ExpectedEndOfString }
             };
 
             internal static readonly Data[] ParseOnlyData = {
@@ -72,8 +72,7 @@ namespace NodaTime.Test.Text
                 new Data(new PeriodBuilder { Seconds = 5 }) { Text = "PT5S" },
                 new Data(new PeriodBuilder { Milliseconds = 5 }) { Text = "PT0.005S" },
                 new Data(new PeriodBuilder { Ticks = 5 }) { Text = "PT0.0000005S" },
-                new Data(new PeriodBuilder { Nanoseconds = 5 }) { Text = "PT0.000000005S" },
-
+                
                 // Compound, negative and zero tests
                 new Data(new PeriodBuilder { Years = 5, Months = 2 }) { Text = "P5Y2M" },
                 new Data(new PeriodBuilder { Months = 1, Hours = 0 }) { Text = "P1M" },
@@ -95,13 +94,10 @@ namespace NodaTime.Test.Text
                 {
                     foreach (var item in sequence)
                     {
-                        item.StandardPattern = PeriodPattern.NormalizingIso;
+                        item.StandardPattern = PeriodPattern.NormalizingIsoPattern;
                     }
                 }
             }
-
-            [Test]
-            public void ParseNull() => AssertParseNull(PeriodPattern.NormalizingIso);
         }
     }
 }

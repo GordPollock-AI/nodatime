@@ -1,29 +1,29 @@
 ﻿// Copyright 2014 The Noda Time Authors. All rights reserved.
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
-
+using System;
+using System.Globalization;
 using NodaTime.Calendars;
 using NodaTime.Text;
 using NUnit.Framework;
-using System;
-using System.Linq;
 
 namespace NodaTime.Test.Calendars
 {
     /// <summary>
     /// Tests for HebrewYearMonthDayCalculator via the Hebrew CalendarSystem.
-    /// See https://blog.nodatime.org/2014/06/hebrew-calendar-cheat-sheet.html
+    /// See http://noda-time.blogspot.co.uk/2014/06/hebrew-calendar-cheat-sheet.html
     /// for sample year information.
     /// </summary>
+    [TestFixture]
     public class HebrewCalendarSystemTest
     {
         [Test]
         public void IsLeapYear()
         {
-            var bcl = BclCalendars.Hebrew;
+            var bcl = new HebrewCalendar();
             var minYear = bcl.GetYear(bcl.MinSupportedDateTime);
             var maxYear = bcl.GetYear(bcl.MaxSupportedDateTime);
-            var noda = CalendarSystem.HebrewCivil;
+            var noda = CalendarSystem.GetHebrewCalendar(HebrewMonthNumbering.Civil);
 
             for (int year = minYear; year <= maxYear; year++)
             {
@@ -35,42 +35,58 @@ namespace NodaTime.Test.Calendars
         /// This tests every day for the BCL-supported Hebrew calendar range, testing various aspects of each date,
         /// using the civil month numbering.
         /// </summary>
-        [Test]
-        [Explicit]
-        [Category("Slow")]
+        [Test, Timeout(300000)] // Can take a long time under NCrunch.
         public void BclThroughHistory_Civil()
         {
-            var bcl = BclCalendars.Hebrew;
-            var noda = CalendarSystem.HebrewCivil;
+            Calendar bcl = new HebrewCalendar();
+            var noda = CalendarSystem.GetHebrewCalendar(HebrewMonthNumbering.Civil);
 
             // The min supported date/time starts part way through the year
             var minYear = bcl.GetYear(bcl.MinSupportedDateTime) + 1;
             // The max supported date/time ends part way through the year
             var maxYear = bcl.GetYear(bcl.MaxSupportedDateTime) - 1;
 
-            BclEquivalenceHelper.AssertEquivalent(bcl, noda, minYear, maxYear);
+            for (int year = minYear; year <= maxYear; year++)
+            {
+                int months = bcl.GetMonthsInYear(year);
+                Assert.AreEqual(months, noda.GetMaxMonth(year));
+                for (int month = 1; month <= months; month++)
+                {
+                    Assert.AreEqual(bcl.GetDaysInMonth(year, month), noda.GetDaysInMonth(year, month),
+                        "Year: {0}; Month: {1}", year, month);
+                    for (int day = 1; day < bcl.GetDaysInMonth(year, month); day++)
+                    {
+                        DateTime bclDate = new DateTime(year, month, day, bcl);
+                        LocalDate nodaDate = new LocalDate(year, month, day, noda);
+                        Assert.AreEqual(bclDate, nodaDate.AtMidnight().ToDateTimeUnspecified());
+                        Assert.AreEqual(nodaDate, LocalDateTime.FromDateTime(bclDate).WithCalendar(noda).Date);
+                        Assert.AreEqual(year, nodaDate.Year);
+                        Assert.AreEqual(month, nodaDate.Month);
+                        Assert.AreEqual(day, nodaDate.Day);
+                    }
+                }
+            }
         }
 
         /// <summary>
         /// This tests every day for the BCL-supported Hebrew calendar range, testing various aspects of each date,
         /// using the scriptural month numbering.
         /// </summary>
-        [Test]
+        [Test, Timeout(300000)] // Can take a long time under NCrunch.
         public void BclThroughHistory_Scriptural()
         {
-            var bcl = BclCalendars.Hebrew;
-            var noda = CalendarSystem.HebrewScriptural;
+            Calendar bcl = new HebrewCalendar();
+            var noda = CalendarSystem.GetHebrewCalendar(HebrewMonthNumbering.Scriptural);
 
             // The min supported date/time starts part way through the year
             var minYear = bcl.GetYear(bcl.MinSupportedDateTime) + 1;
             // The max supported date/time ends part way through the year
             var maxYear = bcl.GetYear(bcl.MaxSupportedDateTime) - 1;
 
-            // Can't use BclEquivalenceHelper for this one, because of the month conversions.
             for (int year = minYear; year <= maxYear; year++)
             {
                 int months = bcl.GetMonthsInYear(year);
-                Assert.AreEqual(months, noda.GetMonthsInYear(year));
+                Assert.AreEqual(months, noda.GetMaxMonth(year));
                 for (int civilMonth = 1; civilMonth <= months; civilMonth++)
                 {
                     int scripturalMonth = HebrewMonthConverter.CivilToScriptural(year, civilMonth);
@@ -78,10 +94,10 @@ namespace NodaTime.Test.Calendars
                         "Year: {0}; Month: {1} (civil)", year, civilMonth);
                     for (int day = 1; day < bcl.GetDaysInMonth(year, civilMonth); day++)
                     {
-                        DateTime bclDate = bcl.ToDateTime(year, civilMonth, day, 0, 0, 0, 0);
+                        DateTime bclDate = new DateTime(year, civilMonth, day, bcl);
                         LocalDate nodaDate = new LocalDate(year, scripturalMonth, day, noda);
-                        Assert.AreEqual(bclDate, nodaDate.AtMidnight().ToDateTimeUnspecified(), "{0}-{1}-{2}", year, scripturalMonth, day);
-                        Assert.AreEqual(nodaDate, LocalDateTime.FromDateTime(bclDate, noda).Date);
+                        Assert.AreEqual(bclDate, nodaDate.AtMidnight().ToDateTimeUnspecified());
+                        Assert.AreEqual(nodaDate, LocalDateTime.FromDateTime(bclDate).WithCalendar(noda).Date);
                         Assert.AreEqual(year, nodaDate.Year);
                         Assert.AreEqual(scripturalMonth, nodaDate.Month);
                         Assert.AreEqual(day, nodaDate.Day);
@@ -114,9 +130,9 @@ namespace NodaTime.Test.Calendars
         [TestCase("5400-09-30", 2, "5402-09-30")] // No truncation in Kislev (both 5503 and 5504 are long)
         public void SetYear(string startText, int years, string expectedEndText)
         {
-            var civil = CalendarSystem.HebrewCivil;
-            var scriptural = CalendarSystem.HebrewScriptural;
-            var pattern = LocalDatePattern.CreateWithInvariantCulture("uuuu-MM-dd")
+            var civil = CalendarSystem.GetHebrewCalendar(HebrewMonthNumbering.Civil);
+            var scriptural = CalendarSystem.GetHebrewCalendar(HebrewMonthNumbering.Scriptural);
+            var pattern = LocalDatePattern.CreateWithInvariantCulture("yyyy-MM-dd")
                 .WithTemplateValue(new LocalDate(5774, 1, 1, scriptural)); // Sample value in 2014 ISO
 
             var start = pattern.Parse(startText).Value;
@@ -129,11 +145,11 @@ namespace NodaTime.Test.Calendars
         }
 
         [Test]
-        [TestCaseSource(nameof(AddAndSubtractMonthCases))]
+        [TestCaseSource("AddAndSubtractMonthCases")]
         public void AddMonths_MonthsBetween(string startText, int months, string expectedEndText)
         {
-            var civil = CalendarSystem.HebrewCivil;
-            var pattern = LocalDatePattern.CreateWithInvariantCulture("uuuu-MM-dd")
+            var civil = CalendarSystem.GetHebrewCalendar(HebrewMonthNumbering.Civil);
+            var pattern = LocalDatePattern.CreateWithInvariantCulture("yyyy-MM-dd")
                 .WithTemplateValue(new LocalDate(5774, 1, 1, civil)); // Sample value in 2014 ISO
 
             var start = pattern.Parse(startText).Value;
@@ -142,12 +158,12 @@ namespace NodaTime.Test.Calendars
         }
 
         [Test]
-        [TestCaseSource(nameof(AddAndSubtractMonthCases))]
-        [TestCaseSource(nameof(MonthsBetweenCases))]
+        [TestCaseSource("AddAndSubtractMonthCases")]
+        [TestCaseSource("MonthsBetweenCases")]
         public void MonthsBetween(string startText, int expectedMonths, string endText)
         {
-            var civil = CalendarSystem.HebrewCivil;
-            var pattern = LocalDatePattern.CreateWithInvariantCulture("uuuu-MM-dd")
+            var civil = CalendarSystem.GetHebrewCalendar(HebrewMonthNumbering.Civil);
+            var pattern = LocalDatePattern.CreateWithInvariantCulture("yyyy-MM-dd")
                 .WithTemplateValue(new LocalDate(5774, 1, 1, civil)); // Sample value in 2014 ISO
 
             var start = pattern.Parse(startText).Value;
@@ -158,94 +174,11 @@ namespace NodaTime.Test.Calendars
         [Test]
         public void MonthsBetween_TimeOfDay()
         {
-            var civil = CalendarSystem.HebrewCivil;
+            var civil = CalendarSystem.GetHebrewCalendar(HebrewMonthNumbering.Civil);
             var start = new LocalDateTime(5774, 5, 10, 15, 0, civil); // 3pm
             var end = new LocalDateTime(5774, 7, 10, 5, 0, civil); // 5am
             // Would be 2, but the start time is later than the end time.
             Assert.AreEqual(1, Period.Between(start, end, PeriodUnits.Months).Months);
-        }
-
-        [Test]
-        [TestCase(HebrewMonthNumbering.Civil)]
-        [TestCase(HebrewMonthNumbering.Scriptural)]
-        public void DayOfYearAndReverse(HebrewMonthNumbering numbering)
-        {
-            var calculator = new HebrewYearMonthDayCalculator(numbering);
-            for (int year = 5400; year < 5419; year++)
-            {
-                int daysInYear = calculator.GetDaysInYear(year);
-                for (int dayOfYear = 1; dayOfYear <= daysInYear; dayOfYear++)
-                {
-                    YearMonthDay ymd = calculator.GetYearMonthDay(year, dayOfYear);
-                    Assert.AreEqual(dayOfYear, calculator.GetDayOfYear(ymd));
-                }
-            }
-        }
-
-        [Test]
-        public void GetDaysSinceEpoch()
-        {
-            var calculator = new HebrewYearMonthDayCalculator(HebrewMonthNumbering.Scriptural);
-            var unixEpoch = new YearMonthDay(5730, 10, 23);
-            Assert.AreEqual(0, calculator.GetDaysSinceEpoch(unixEpoch));
-        }
-
-        [Test]
-        public void DaysAtStartOfYear()
-        {
-            // These are somewhat random values used when diagnosing an issue.
-            var calculator = new HebrewYearMonthDayCalculator(HebrewMonthNumbering.Scriptural);
-            Assert.AreEqual(-110, calculator.GetStartOfYearInDays(5730));
-            Assert.AreEqual(273, calculator.GetStartOfYearInDays(5731));
-            Assert.AreEqual(-140735, calculator.GetStartOfYearInDays(5345));
-            Assert.AreEqual(new YearMonthDay(5345, 1, 1), calculator.GetYearMonthDay(-140529));
-        }
-
-        [Test]
-        public void GetDaysInYearCrossCheck()
-        {
-            var calculator = new HebrewYearMonthDayCalculator(HebrewMonthNumbering.Civil);
-            for (int year = calculator.MinYear; year <= calculator.MaxYear; year++)
-            {
-                int sum = Enumerable.Range(1, calculator.GetMonthsInYear(year))
-                                    .Sum(month => calculator.GetDaysInMonth(year, month));
-                Assert.AreEqual(sum, calculator.GetDaysInYear(year), "Days in {0}", year);
-            }
-        }
-
-        [Test]
-        [TestCase("5502-01-01", "5503-01-01")]
-        [TestCase("5502-01-01", "5502-02-01", Description = "Months in same half of year")]
-        // This is the test that looks odd...
-        [TestCase("5502-12-01", "5502-02-01", Description = "Months in opposite half of year")]
-        [TestCase("5502-03-10", "5502-03-12")]
-        public void ScripturalCompare(string earlier, string later)
-        {
-            var pattern = LocalDatePattern.Iso.WithCalendar(CalendarSystem.HebrewScriptural);
-            var earlierDate = pattern.Parse(earlier).Value;
-            var laterDate = pattern.Parse(later).Value;
-            TestHelper.TestCompareToStruct(earlierDate, earlierDate, laterDate);
-        }
-
-        [Test]
-        public void ScripturalGetDaysFromStartOfYearToStartOfMonth_InvalidForCoverage()
-        {
-            Assert.Throws<ArgumentOutOfRangeException>(() => HebrewScripturalCalculator.GetDaysFromStartOfYearToStartOfMonth(5502, 0));
-        }
-
-        [Test]
-        [TestCase(HebrewMonthNumbering.Civil)]
-        [TestCase(HebrewMonthNumbering.Scriptural)]
-        public void PlusMonths_Overflow(HebrewMonthNumbering monthNumbering)
-        {
-            var calendar = CalendarSystem.GetHebrewCalendar(monthNumbering);
-            // TODO: It would be nice to have an easy way of getting the smallest/largest LocalDate for
-            // a calendar. Or possibly FromDayOfYear as well... instead, we'll just add/subtract 8 months instead
-            var earlyDate = new LocalDate(calendar.MinYear, 1, 1, calendar);
-            var lateDate = new LocalDate(calendar.MaxYear, 12, 1, calendar);
-
-            Assert.Throws<OverflowException>(() => earlyDate.PlusMonths(-7));
-            Assert.Throws<OverflowException>(() => lateDate.PlusMonths(7));
         }
 
         // Cases used for adding months and differences between months.

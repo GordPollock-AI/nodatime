@@ -6,20 +6,20 @@ using NUnit.Framework;
 
 namespace NodaTime.Test
 {
-    partial class InstantTest
+    partial class LocalInstantTest
     {
         #region IEquatable.Equals
         [Test]
         public void IEquatableEquals_ToSelf_IsTrue()
         {
-            Assert.True(NodaConstants.UnixEpoch.Equals(NodaConstants.UnixEpoch), "epoch == epoch (same object)");
+            Assert.True(LocalInstant.LocalUnixEpoch.Equals(LocalInstant.LocalUnixEpoch), "epoch == epoch (same object)");
         }
 
         [Test]
         public void IEquatableEquals_WithEqualTicks_IsTrue()
         {
-            var first = new Instant(100L);
-            var second = new Instant(100L);
+            var first = new LocalInstant(100L);
+            var second = new LocalInstant(100L);
             Assert.True(first.Equals(second), "100 == 100 (different objects)");
         }
 
@@ -29,7 +29,7 @@ namespace NodaTime.Test
             Assert.False(one.Equals(negativeOne), "1 == -1");
             Assert.False(one.Equals(threeMillion), "1 == 3,000,000");
             Assert.False(one.Equals(negativeFiftyMillion), "1 == -50,000,000");
-            Assert.False(Instant.MinValue.Equals(Instant.MaxValue), "MinValue == MaxValue");
+            Assert.False(LocalInstant.MinValue.Equals(LocalInstant.MaxValue), "MinValue == MaxValue");
         }
         #endregion
 
@@ -40,14 +40,6 @@ namespace NodaTime.Test
             object oOne = one;
 
             Assert.False(oOne.Equals(null), "1 == null");
-        }
-
-        [Test]
-        public void ObjectEquals_ToNonInstant_IsFalse()
-        {
-            object oOne = one;
-
-            Assert.False(oOne.Equals("foo"));
         }
 
         [Test]
@@ -74,8 +66,8 @@ namespace NodaTime.Test
             object oNegativeOne = negativeOne;
             object oThreeMillion = threeMillion;
             object oNegativeFiftyMillion = negativeFiftyMillion;
-            object oMinimum = Instant.MinValue;
-            object oMaximum = Instant.MaxValue;
+            object oMinimum = LocalInstant.MinValue;
+            object oMaximum = LocalInstant.MaxValue;
 
             Assert.False(oOne.Equals(oNegativeOne), "1 == -1");
             Assert.False(oOne.Equals(oThreeMillion), "1 == 3,000,000");
@@ -88,8 +80,8 @@ namespace NodaTime.Test
         [Test]
         public void GetHashCode_Twice_IsEqual()
         {
-            var test1 = new Instant(123L);
-            var test2 = new Instant(123L);
+            var test1 = new LocalInstant(123L);
+            var test2 = new LocalInstant(123L);
             Assert.AreEqual(test1.GetHashCode(), test1.GetHashCode());
             Assert.AreEqual(test2.GetHashCode(), test2.GetHashCode());
         }
@@ -97,22 +89,67 @@ namespace NodaTime.Test
         [Test]
         public void GetHashCode_SameTicks_IsEqual()
         {
-            var test1 = new Instant(123L);
-            var test2 = new Instant(123L);
+            var test1 = new LocalInstant(123L);
+            var test2 = new LocalInstant(123L);
             Assert.AreEqual(test1.GetHashCode(), test2.GetHashCode());
         }
 
         [Test]
         public void GetHashCode_DifferentTicks_IsDifferent()
         {
-            var test1 = new Instant(123L);
-            var test2 = new Instant(123L);
-            var test3 = new Instant(321L);
+            var test1 = new LocalInstant(123L);
+            var test2 = new LocalInstant(123L);
+            var test3 = new LocalInstant(321L);
 
             Assert.AreNotEqual(test1.GetHashCode(), test3.GetHashCode());
             Assert.AreNotEqual(test2.GetHashCode(), test3.GetHashCode());
         }
         #endregion
+
+        #region CompareTo
+        [Test]
+        public void CompareTo_Self_IsEqual()
+        {
+            Assert.AreEqual(0, one.CompareTo(one), "1 == 1 (same object)");
+        }
+
+        [Test]
+        public void CompareTo_WithEqualTicks_IsEqual()
+        {
+            Assert.AreEqual(0, one.CompareTo(onePrime), "1 == 1 (different objects)");
+        }
+
+        [Test]
+        public void CompareTo_WithMoreTicks_IsGreater()
+        {
+            Assert.Greater(one.CompareTo(negativeFiftyMillion), 0, "1 > -50,000,000");
+            Assert.Greater(threeMillion.CompareTo(one), 0, "3,000,000 > 1");
+            Assert.Greater(negativeOne.CompareTo(negativeFiftyMillion), 0, "-1 > -50,000,000");
+            Assert.Greater(LocalInstant.MaxValue.CompareTo(LocalInstant.MinValue), 0, "MaxValue > MinValue");
+        }
+
+        [Test]
+        public void CompareTo_WithLessTicks_IsLess()
+        {
+            Assert.Less(negativeFiftyMillion.CompareTo(one), 0, "-50,000,000 < 1");
+            Assert.Less(one.CompareTo(threeMillion), 0, "1 < 3,000,000");
+            Assert.Less(negativeFiftyMillion.CompareTo(negativeOne), 0, "-50,000,000 > -1");
+            Assert.Less(LocalInstant.MinValue.CompareTo(LocalInstant.MaxValue), 0, "MinValue < MaxValue");
+        }
+        #endregion
+
+        [Test]
+        public void IEquatableIComparable_Tests()
+        {
+            var value = new LocalInstant(12345);
+            var equalValue = new LocalInstant(12345);
+            var greaterValue = new LocalInstant(5432199);
+
+            TestHelper.TestEqualsStruct(value, equalValue, greaterValue);
+            TestHelper.TestCompareToStruct(value, equalValue, greaterValue);
+            TestHelper.TestNonGenericCompareTo(value, equalValue, greaterValue);
+            TestHelper.TestOperatorComparisonEquality(value, equalValue, greaterValue);
+        }
 
         #region operator ==
         [Test]
@@ -137,7 +174,7 @@ namespace NodaTime.Test
             Assert.False(one == negativeOne, "1 == -1");
             Assert.False(one == threeMillion, "1 == 3,000,000");
             Assert.False(one == negativeFiftyMillion, "1 == -50,000,000");
-            Assert.False(Instant.MinValue == Instant.MaxValue, "MinValue == MaxValue");
+            Assert.False(LocalInstant.MinValue == LocalInstant.MaxValue, "MinValue == MaxValue");
         }
         #endregion
 
@@ -164,7 +201,7 @@ namespace NodaTime.Test
             Assert.True(one != negativeOne, "1 != -1");
             Assert.True(one != threeMillion, "1 != 3,000,000");
             Assert.True(one != negativeFiftyMillion, "1 != -50,000,000");
-            Assert.True(Instant.MinValue != Instant.MaxValue, "MinValue != MaxValue");
+            Assert.True(LocalInstant.MinValue != LocalInstant.MaxValue, "MinValue != MaxValue");
         }
         #endregion
 
@@ -190,7 +227,7 @@ namespace NodaTime.Test
         {
             Assert.True(one < threeMillion, "1 < 3,000,000");
             Assert.True(negativeFiftyMillion < negativeOne, "-50,000,000 < -1");
-            Assert.True(Instant.MinValue < Instant.MaxValue, "MinValue < MaxValue");
+            Assert.True(LocalInstant.MinValue < LocalInstant.MaxValue, "MinValue < MaxValue");
         }
 
         [Test]
@@ -198,7 +235,7 @@ namespace NodaTime.Test
         {
             Assert.False(threeMillion < one, "3,000,000 < 1");
             Assert.False(negativeOne < negativeFiftyMillion, "-1 < -50,000,000");
-            Assert.False(Instant.MaxValue < Instant.MinValue, "MaxValue < MinValue");
+            Assert.False(LocalInstant.MaxValue < LocalInstant.MinValue, "MaxValue < MinValue");
         }
         #endregion
 
@@ -224,7 +261,7 @@ namespace NodaTime.Test
         {
             Assert.True(one <= threeMillion, "1 <= 3,000,000");
             Assert.True(negativeFiftyMillion <= negativeOne, "-50,000,000 <= -1");
-            Assert.True(Instant.MinValue <= Instant.MaxValue, "MinValue <= MaxValue");
+            Assert.True(LocalInstant.MinValue <= LocalInstant.MaxValue, "MinValue <= MaxValue");
         }
 
         [Test]
@@ -232,7 +269,7 @@ namespace NodaTime.Test
         {
             Assert.False(threeMillion <= one, "3,000,000 <= 1");
             Assert.False(negativeOne <= negativeFiftyMillion, "-1 <= -50,000,000");
-            Assert.False(Instant.MaxValue <= Instant.MinValue, "MaxValue <= MinValue");
+            Assert.False(LocalInstant.MaxValue <= LocalInstant.MinValue, "MaxValue <= MinValue");
         }
         #endregion
 
@@ -258,7 +295,7 @@ namespace NodaTime.Test
         {
             Assert.False(one > threeMillion, "1 > 3,000,000");
             Assert.False(negativeFiftyMillion > negativeOne, "-50,000,000 > -1");
-            Assert.False(Instant.MinValue > Instant.MaxValue, "MinValue > MaxValue");
+            Assert.False(LocalInstant.MinValue > LocalInstant.MaxValue, "MinValue > MaxValue");
         }
 
         [Test]
@@ -266,7 +303,7 @@ namespace NodaTime.Test
         {
             Assert.True(threeMillion > one, "3,000,000 > 1");
             Assert.True(negativeOne > negativeFiftyMillion, "-1 > -50,000,000");
-            Assert.True(Instant.MaxValue > Instant.MinValue, "MaxValue > MinValue");
+            Assert.True(LocalInstant.MaxValue > LocalInstant.MinValue, "MaxValue > MinValue");
         }
         #endregion
 
@@ -292,7 +329,7 @@ namespace NodaTime.Test
         {
             Assert.False(one >= threeMillion, "1 >= 3,000,000");
             Assert.False(negativeFiftyMillion >= negativeOne, "-50,000,000 >= -1");
-            Assert.False(Instant.MinValue >= Instant.MaxValue, "MinValue >= MaxValue");
+            Assert.False(LocalInstant.MinValue >= LocalInstant.MaxValue, "MinValue >= MaxValue");
         }
 
         [Test]
@@ -300,74 +337,39 @@ namespace NodaTime.Test
         {
             Assert.True(threeMillion >= one, "3,000,000 >= 1");
             Assert.True(negativeOne >= negativeFiftyMillion, "-1 >= -50,000,000");
-            Assert.True(Instant.MaxValue >= Instant.MinValue, "MaxValue >= MinValue");
+            Assert.True(LocalInstant.MaxValue >= LocalInstant.MinValue, "MaxValue >= MinValue");
         }
         #endregion
 
         #region operator +
         [Test]
-        public void PlusTicks()
+        public void OperatorPlus_DurationZero_IsNeutralElement()
         {
-            Instant instant = new Instant(5);
-            Assert.AreEqual(new Instant(8), instant.PlusTicks(3));
+            Assert.AreEqual(LocalInstant.LocalUnixEpoch, LocalInstant.LocalUnixEpoch + Duration.Zero, "LocalUnixEpoch + Duration.Zero");
+            Assert.AreEqual(one, one + Duration.Zero, "LocalInstant(1) + Duration.Zero");
+            Assert.AreEqual(one, LocalInstant.LocalUnixEpoch + Duration.Epsilon, "LocalUnixEpoch + Duration.Epsilon");
         }
 
         [Test]
-        public void OperatorPlusDuration_Zero_IsNeutralElement()
-        {
-            Assert.AreEqual(NodaConstants.UnixEpoch, NodaConstants.UnixEpoch + Duration.Zero, "UnixEpoch + Duration.Zero");
-            Assert.AreEqual(one, one + Duration.Zero, "Instant(1) + Duration.Zero");
-            Assert.AreEqual(one, NodaConstants.UnixEpoch + Duration.Epsilon, "UnixEpoch + Duration.Epsilon");
-        }
-
-        [Test]
-        public void OperatorPlusDuration_NonZero()
+        public void OperatorPlus_DurationNonZero()
         {
             Assert.AreEqual(3000001L, (threeMillion + Duration.Epsilon).Ticks, "3,000,000 + 1");
             Assert.AreEqual(0L, (one + durationNegativeEpsilon).Ticks, "1 + (-1)");
             Assert.AreEqual(-49999999L, (negativeFiftyMillion + Duration.Epsilon).Ticks, "-50,000,000 + 1");
         }
-
-        // Smoke tests for methods which simply delegate to the + operator.
-        [Test]
-        public void OperatorPlus_Equivalents()
-        {
-            Assert.AreEqual(threeMillion + Duration.Epsilon, threeMillion.Plus(Duration.Epsilon));
-            Assert.AreEqual(threeMillion + Duration.Epsilon, Instant.Add(threeMillion, Duration.Epsilon));
-        }
-
-        // The Plus(Offset) method *would* be an operator, but can't be as LocalInstant is internal.
-        [Test]
-        public void OperatorPlusOffset_Zero_IsNeutralElement()
-        {
-            Assert.AreEqual(LocalInstant.LocalUnixEpoch, NodaConstants.UnixEpoch.Plus(Offset.Zero), "UnixEpoch + Offset.Zero");
-            Assert.AreEqual(new LocalInstant(1L), one.Plus(Offset.Zero), "Instant(1) + Offset.Zero");
-            Assert.AreEqual(new LocalInstant(NodaConstants.TicksPerHour), NodaConstants.UnixEpoch.Plus(offsetOneHour), "UnixEpoch + offsetOneHour");
-        }
         #endregion
 
-        #region operator - (duration)
+        #region operator -
         [Test]
-        public void OperatorMinusDuration()
+        public void OperatorMinusDuratino_Zero_IsNeutralElement()
         {
-            Assert.AreEqual(threeMillion, threeMillion - Duration.Zero);
-            Assert.AreEqual(2999999L, (threeMillion - Duration.Epsilon).Ticks, "3,000,000 - 1");
-            Assert.AreEqual(2L, (one - Duration.FromTicks(-1)).Ticks, "1 - (-1)");
-            Assert.AreEqual(-50000001L, (negativeFiftyMillion - Duration.Epsilon).Ticks, "-50,000,000 - 1");
+            Assert.AreEqual(0L, (LocalInstant.LocalUnixEpoch - LocalInstant.LocalUnixEpoch).Ticks, "0 - 0");
+            Assert.AreEqual(1L, (one - LocalInstant.LocalUnixEpoch).Ticks, "1 - 0");
+            Assert.AreEqual(-1L, (LocalInstant.LocalUnixEpoch - one).Ticks, "0 - 1");
         }
 
-        // Smoke tests for methods which simply delegate to the - operator.
         [Test]
-        public void OperatorMinus_Duration_Equivalents()
-        {
-            Assert.AreEqual(threeMillion - Duration.Epsilon, threeMillion.Minus(Duration.Epsilon));
-            Assert.AreEqual(threeMillion - Duration.Epsilon, Instant.Subtract(threeMillion, Duration.Epsilon));
-        }
-        #endregion
-
-        #region operator - (instant)
-        [Test]
-        public void OperatorMinusInstant_NonZero()
+        public void OperatorMinusDuration_NonZero()
         {
             Assert.AreEqual(2999999L, (threeMillion - one).Ticks, "3,000,000 - 1");
             Assert.AreEqual(2L, (one - negativeOne).Ticks, "1 - (-1)");
@@ -375,30 +377,11 @@ namespace NodaTime.Test
         }
 
         [Test]
-        public void OperatorMinusInstant_UnixEpoch_IsNeutralElement()
+        public void OperatorMinusOffset_Zero_IsNeutralElement()
         {
-            Assert.AreEqual(0L, (NodaConstants.UnixEpoch - NodaConstants.UnixEpoch).Ticks, "0 - 0");
-            Assert.AreEqual(1L, (one - NodaConstants.UnixEpoch).Ticks, "1 - 0");
-            Assert.AreEqual(-1L, (NodaConstants.UnixEpoch - one).Ticks, "0 - 1");
-        }
-
-        // Smoke tests for methods which simply delegate to the - operator.
-        [Test]
-        public void OperatorMinus_Instant_Equivalents()
-        {
-            Assert.AreEqual(threeMillion - one, threeMillion.Minus(one));
-            Assert.AreEqual(threeMillion - one, Instant.Subtract(threeMillion, one));
-        }
-        #endregion
-
-        #region IComparable and IComparable{T}
-        [Test]
-        public void CompareTo()
-        {
-            TestHelper.TestCompareToStruct(one, one, threeMillion);
-            TestHelper.TestCompareToStruct(Instant.MinValue, Instant.MinValue, Instant.MaxValue);
-            TestHelper.TestNonGenericCompareTo(one, one, threeMillion);
-            TestHelper.TestNonGenericCompareTo(Instant.MinValue, Instant.MinValue, Instant.MaxValue);
+            Assert.AreEqual(NodaConstants.UnixEpoch, LocalInstant.LocalUnixEpoch.Minus(Offset.Zero), "LocalUnixEpoch - Offset.Zero");
+            Assert.AreEqual(new Instant(1L), one.Minus(Offset.Zero), "LocalInstant(1) - Offset.Zero");
+            Assert.AreEqual(new Instant(-NodaConstants.TicksPerHour), LocalInstant.LocalUnixEpoch.Minus(offsetOneHour), "LocalUnixEpoch - offsetOneHour");
         }
         #endregion
     }

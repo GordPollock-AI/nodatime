@@ -13,7 +13,7 @@ namespace NodaTime.Test
         [Test]
         public void Equals_EqualValues()
         {
-            CalendarSystem calendar = CalendarSystem.Julian;
+            CalendarSystem calendar = CalendarSystem.GetJulianCalendar(4);
             LocalDate date1 = new LocalDate(2011, 1, 2, calendar);
             LocalDate date2 = new LocalDate(2011, 1, 2, calendar);
             Assert.AreEqual(date1, date2);
@@ -26,7 +26,7 @@ namespace NodaTime.Test
         [Test]
         public void Equals_DifferentDates()
         {
-            CalendarSystem calendar = CalendarSystem.Julian;
+            CalendarSystem calendar = CalendarSystem.GetJulianCalendar(4);
             LocalDate date1 = new LocalDate(2011, 1, 2, calendar);
             LocalDate date2 = new LocalDate(2011, 1, 3, calendar);
             Assert.AreNotEqual(date1, date2);
@@ -39,7 +39,7 @@ namespace NodaTime.Test
         [Test]
         public void Equals_DifferentCalendars()
         {
-            CalendarSystem calendar = CalendarSystem.Julian;
+            CalendarSystem calendar = CalendarSystem.GetJulianCalendar(4);
             LocalDate date1 = new LocalDate(2011, 1, 2, calendar);
             LocalDate date2 = new LocalDate(2011, 1, 2, CalendarSystem.Iso);
             Assert.AreNotEqual(date1, date2);
@@ -53,14 +53,14 @@ namespace NodaTime.Test
         public void Equals_DifferentToNull()
         {
             LocalDate date = new LocalDate(2011, 1, 2);
-            Assert.IsFalse(date.Equals(null!));
+            Assert.IsFalse(date.Equals(null));
         }
 
         [Test]
         public void Equals_DifferentToOtherType()
         {
             LocalDate date = new LocalDate(2011, 1, 2);
-            Assert.IsFalse(date.Equals(Instant.FromUnixTimeTicks(0)));
+            Assert.IsFalse(date.Equals(new Instant(0)));
         }
 
         [Test]
@@ -92,15 +92,16 @@ namespace NodaTime.Test
         }
 
         [Test]
-        public void ComparisonOperators_DifferentCalendars_Throws()
+        public void ComparisonOperators_DifferentCalendars_AlwaysReturnsFalse()
         {
             LocalDate date1 = new LocalDate(2011, 1, 2);
-            LocalDate date2 = new LocalDate(2011, 1, 3, CalendarSystem.Julian);
+            LocalDate date2 = new LocalDate(2011, 1, 3, CalendarSystem.GetJulianCalendar(4));
 
-            Assert.Throws<ArgumentException>(() => (date1 < date2).ToString());
-            Assert.Throws<ArgumentException>(() => (date1 <= date2).ToString());
-            Assert.Throws<ArgumentException>(() => (date1 > date2).ToString());
-            Assert.Throws<ArgumentException>(() => (date1 >= date2).ToString());
+            // All inequality comparisons return false
+            Assert.IsFalse(date1 < date2);
+            Assert.IsFalse(date1 <= date2);
+            Assert.IsFalse(date1 > date2);
+            Assert.IsFalse(date1 >= date2);
         }
 
         [Test]
@@ -116,14 +117,16 @@ namespace NodaTime.Test
         }
 
         [Test]
-        public void CompareTo_DifferentCalendars_Throws()
+        public void CompareTo_DifferentCalendars_OnlyLocalInstantMatters()
         {
             CalendarSystem islamic = CalendarSystem.GetIslamicCalendar(IslamicLeapYearPattern.Base15, IslamicEpoch.Astronomical);
             LocalDate date1 = new LocalDate(2011, 1, 2);
             LocalDate date2 = new LocalDate(1500, 1, 1, islamic);
+            LocalDate date3 = date1.WithCalendar(islamic);
 
-            Assert.Throws<ArgumentException>(() => date1.CompareTo(date2));
-            Assert.Throws<ArgumentException>(() => ((IComparable) date1).CompareTo(date2));
+            Assert.That(date1.CompareTo(date2), Is.LessThan(0));
+            Assert.That(date2.CompareTo(date1), Is.GreaterThan(0));
+            Assert.That(date1.CompareTo(date3), Is.EqualTo(0));
         }
 
         /// <summary>
@@ -145,14 +148,34 @@ namespace NodaTime.Test
         }
 
         /// <summary>
+        /// IComparable.CompareTo works properly with LocalDate inputs with different calendars.
+        /// </summary>
+        [Test]
+        public void IComparableCompareTo_DifferentCalendars_OnlyLocalInstantMatters()
+        {
+            CalendarSystem islamic = CalendarSystem.GetIslamicCalendar(IslamicLeapYearPattern.Base15, IslamicEpoch.Astronomical);
+            LocalDate date1 = new LocalDate(2011, 1, 2);
+            LocalDate date2 = new LocalDate(1500, 1, 1, islamic);
+            LocalDate date3 = date1.WithCalendar(islamic);
+
+            IComparable i_date1 = (IComparable)date1;
+            IComparable i_date2 = (IComparable)date2;
+
+            Assert.That(i_date1.CompareTo(date2), Is.LessThan(0));
+            Assert.That(i_date2.CompareTo(date1), Is.GreaterThan(0));
+            Assert.That(i_date1.CompareTo(date3), Is.EqualTo(0));
+        }
+
+        /// <summary>
         /// IComparable.CompareTo returns a positive number for a null input.
         /// </summary>
         [Test]
         public void IComparableCompareTo_Null_Positive()
         {
             var instance = new LocalDate(2012, 3, 5);
-            var comparable = (IComparable)instance;
-            var result = comparable.CompareTo(null!);
+            var i_instance = (IComparable)instance;
+            object arg = null;
+            var result = i_instance.CompareTo(arg);
             Assert.Greater(result, 0);
         }
 
@@ -170,28 +193,6 @@ namespace NodaTime.Test
             {
                 i_instance.CompareTo(arg);
             });
-        }
-
-        [Test]
-        public void MinMax_DifferentCalendars_Throws()
-        {
-            LocalDate date1 = new LocalDate(2011, 1, 2);
-            LocalDate date2 = new LocalDate(1500, 1, 1, CalendarSystem.Julian);
-
-            Assert.Throws<ArgumentException>(() => LocalDate.Max(date1, date2));
-            Assert.Throws<ArgumentException>(() => LocalDate.Min(date1, date2));
-        }
-
-        [Test]
-        public void MinMax_SameCalendar()
-        {
-            LocalDate date1 = new LocalDate(1500, 1, 2, CalendarSystem.Julian);
-            LocalDate date2 = new LocalDate(1500, 1, 1, CalendarSystem.Julian);
-
-            Assert.AreEqual(date1, LocalDate.Max(date1, date2));
-            Assert.AreEqual(date1, LocalDate.Max(date2, date1));
-            Assert.AreEqual(date2, LocalDate.Min(date1, date2));
-            Assert.AreEqual(date2, LocalDate.Min(date2, date1));
         }
     }
 }

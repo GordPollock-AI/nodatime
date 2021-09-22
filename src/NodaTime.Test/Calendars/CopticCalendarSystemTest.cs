@@ -4,23 +4,23 @@
 
 using NodaTime.Calendars;
 using NUnit.Framework;
-using System;
 
 namespace NodaTime.Test.Calendars
 {
     /// <summary>
     /// Tests for the Coptic calendar system.
     /// </summary>
+    [TestFixture]
     public class CopticCalendarSystemTest
     {
         [Test]
         public void CopticEpoch()
         {
-            CalendarSystem coptic = CalendarSystem.Coptic;
+            CalendarSystem coptic = CalendarSystem.GetCopticCalendar(4);
             LocalDateTime copticEpoch = new LocalDateTime(1, 1, 1, 0, 0, coptic);
 
-            CalendarSystem julian = CalendarSystem.Julian;
-            LocalDateTime converted = copticEpoch.WithCalendar(julian);
+            CalendarSystem julian = CalendarSystem.GetJulianCalendar(4);
+            LocalDateTime converted = new LocalDateTime(copticEpoch.LocalInstant, julian);
 
             LocalDateTime expected = new LocalDateTime(284, 8, 29, 0, 0, julian);
             Assert.AreEqual(expected, converted);
@@ -29,8 +29,8 @@ namespace NodaTime.Test.Calendars
         [Test]
         public void UnixEpoch()
         {
-            CalendarSystem coptic = CalendarSystem.Coptic;
-            LocalDateTime unixEpochInCopticCalendar = NodaConstants.UnixEpoch.InZone(DateTimeZone.Utc, coptic).LocalDateTime;
+            CalendarSystem coptic = CalendarSystem.GetCopticCalendar(4);
+            LocalDateTime unixEpochInCopticCalendar = new LocalDateTime(LocalInstant.LocalUnixEpoch, coptic);
             LocalDateTime expected = new LocalDateTime(1686, 4, 23, 0, 0, coptic);
             Assert.AreEqual(expected, unixEpochInCopticCalendar);
         }
@@ -38,11 +38,15 @@ namespace NodaTime.Test.Calendars
         [Test]
         public void SampleDate()
         {
-            CalendarSystem copticCalendar = CalendarSystem.Coptic;
+            CalendarSystem copticCalendar = CalendarSystem.GetCopticCalendar(4);
             LocalDateTime iso = new LocalDateTime(2004, 6, 9, 0, 0, 0, 0);
-            LocalDateTime coptic = iso.WithCalendar(copticCalendar);
+            LocalDateTime coptic = new LocalDateTime(iso.LocalInstant, copticCalendar);
 
             Assert.AreEqual(Era.AnnoMartyrum, coptic.Era);
+            // The misspelled version of the Era works too.
+            Assert.AreEqual(Era.AnnoMartyrm, coptic.Era);
+            Assert.AreEqual(18, coptic.CenturyOfEra);
+            Assert.AreEqual(20, coptic.YearOfCentury);
             Assert.AreEqual(1720, coptic.YearOfEra);
 
             Assert.AreEqual(1720, coptic.Year);
@@ -51,7 +55,8 @@ namespace NodaTime.Test.Calendars
             Assert.AreEqual(10, coptic.Month);
             Assert.AreEqual(2, coptic.Day);
             
-            Assert.AreEqual(IsoDayOfWeek.Wednesday, coptic.DayOfWeek);
+            // TODO: Determine whether we should consider the Coptic calendar to use ISO days of the week.
+            Assert.AreEqual(IsoDayOfWeek.Wednesday, coptic.IsoDayOfWeek);
 
             Assert.AreEqual(9 * 30 + 2, coptic.DayOfYear);
 
@@ -59,14 +64,6 @@ namespace NodaTime.Test.Calendars
             Assert.AreEqual(0, coptic.Minute);
             Assert.AreEqual(0, coptic.Second);
             Assert.AreEqual(0, coptic.Millisecond);
-        }
-
-        // Really testing SingleEraCalculator...
-        [Test]
-        public void InvalidEra()
-        {
-            Assert.Throws<ArgumentNullException>(() => CalendarSystem.Coptic.GetAbsoluteYear(1720, null!));
-            Assert.Throws<ArgumentException>(() => CalendarSystem.Coptic.GetAbsoluteYear(1720, Era.AnnoHegirae));
         }
     }
 }

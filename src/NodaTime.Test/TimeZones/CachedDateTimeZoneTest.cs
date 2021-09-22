@@ -8,10 +8,24 @@ using NUnit.Framework;
 namespace NodaTime.Test.TimeZones
 {
     // Note that this tests CachingZoneIntervalMap as much as CachedDateTimeZone...
+    [TestFixture]
     public class CachedDateTimeZoneTest
     {
-        private static readonly CachedDateTimeZone timeZone = (CachedDateTimeZone) DateTimeZoneProviders.Tzdb["America/Los_Angeles"];
-        private static readonly Instant summer = Instant.FromUtc(2010, 6, 1, 0, 0);
+        #region Setup/Teardown
+        [SetUp]
+        public void Setup()
+        {
+            timeZone = DateTimeZoneProviders.Tzdb["America/Los_Angeles"] as CachedDateTimeZone;
+            if (timeZone == null)
+            {
+                Assert.Fail("The America/Los_Angeles time zone does not contain a CachedDateTimeZone.");
+            }
+            summer = Instant.FromUtc(2010, 6, 1, 0, 0);
+        }
+        #endregion
+
+        private CachedDateTimeZone timeZone;
+        private Instant summer;
 
         [Test]
         public void GetZoneIntervalInstant_NotNull()
@@ -36,9 +50,9 @@ namespace NodaTime.Test.TimeZones
         {
             var actual = timeZone.GetZoneInterval(summer);
             Assert.IsNotNull(timeZone.GetZoneInterval(NodaConstants.UnixEpoch));
-            Assert.IsNotNull(timeZone.GetZoneInterval(NodaConstants.UnixEpoch + Duration.FromDays(2000 * 7)));
-            Assert.IsNotNull(timeZone.GetZoneInterval(NodaConstants.UnixEpoch + Duration.FromDays(3000 * 7)));
-            Assert.IsNotNull(timeZone.GetZoneInterval(NodaConstants.UnixEpoch + Duration.FromDays(4000 * 7)));
+            Assert.IsNotNull(timeZone.GetZoneInterval(NodaConstants.UnixEpoch + Duration.FromStandardWeeks(2000)));
+            Assert.IsNotNull(timeZone.GetZoneInterval(NodaConstants.UnixEpoch + Duration.FromStandardWeeks(3000)));
+            Assert.IsNotNull(timeZone.GetZoneInterval(NodaConstants.UnixEpoch + Duration.FromStandardWeeks(4000)));
             var newPeriod = timeZone.GetZoneInterval(summer);
             Assert.AreSame(actual, newPeriod);
         }
@@ -48,19 +62,6 @@ namespace NodaTime.Test.TimeZones
         {
             Assert.AreEqual(timeZone.Uncached().MinOffset, timeZone.MinOffset);
             Assert.AreEqual(timeZone.Uncached().MaxOffset, timeZone.MaxOffset);
-        }
-
-        [Test]
-        public void ForZone_Fixed()
-        {
-            var zone = DateTimeZone.ForOffset(Offset.FromHours(1));
-            Assert.AreSame(zone, CachedDateTimeZone.ForZone(zone));
-        }
-
-        [Test]
-        public void ForZone_AlreadyCached()
-        {
-            Assert.AreSame(timeZone, CachedDateTimeZone.ForZone(timeZone));
         }
     }
 }

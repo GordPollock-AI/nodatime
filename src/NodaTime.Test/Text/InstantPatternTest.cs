@@ -2,90 +2,115 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using NodaTime.Properties;
 using NodaTime.Text;
 using NUnit.Framework;
 
 namespace NodaTime.Test.Text
 {
+    [TestFixture]
     public class InstantPatternTest : PatternTestBase<Instant>
     {
         internal static readonly Data[] InvalidPatternData = {
-            new Data { Pattern = "", Message = TextErrorMessages.FormatStringEmpty },
-            new Data { Pattern = "!", Message = TextErrorMessages.UnknownStandardFormat, Parameters = {'!', typeof(Instant).FullName! }},
-            new Data { Pattern = "%", Message = TextErrorMessages.UnknownStandardFormat, Parameters = { '%', typeof(Instant).FullName! } },
-            new Data { Pattern = "\\", Message = TextErrorMessages.UnknownStandardFormat, Parameters = { '\\', typeof(Instant).FullName! } },
+            new Data { Pattern = "!", Message = Messages.Parse_UnknownStandardFormat, Parameters = {'!', typeof(Instant).FullName}},
+            new Data { Pattern = "%", Message = Messages.Parse_UnknownStandardFormat, Parameters = { '%', typeof(Instant).FullName } },
+            new Data { Pattern = "\\", Message = Messages.Parse_UnknownStandardFormat, Parameters = { '\\', typeof(Instant).FullName } },
             // Just a few - these are taken from other tests
-            new Data { Pattern = "%%", Message = TextErrorMessages.PercentDoubled },
-            new Data { Pattern = "%\\", Message = TextErrorMessages.EscapeAtEndOfString },
-            new Data { Pattern = "ffffffffff", Message = TextErrorMessages.RepeatCountExceeded, Parameters = { 'f', 9 } },
-            new Data { Pattern = "FFFFFFFFFF", Message = TextErrorMessages.RepeatCountExceeded, Parameters = { 'F', 9 } },
+            new Data { Pattern = "%%", Message = Messages.Parse_PercentDoubled },
+            new Data { Pattern = "%\\", Message = Messages.Parse_EscapeAtEndOfString },
+            new Data { Pattern = "ffffffff", Message = Messages.Parse_RepeatCountExceeded, Parameters = { 'f', 7 } },
+            new Data { Pattern = "FFFFFFFF", Message = Messages.Parse_RepeatCountExceeded, Parameters = { 'F', 7 } },
         };
 
         internal static Data[] ParseFailureData = {
-            // TODO: Make these use typeof(Instant)
-            new Data { Text = "rubbish", Pattern = "uuuuMMdd'T'HH:mm:ss", Message = TextErrorMessages.MismatchedNumber, Parameters = { "uuuu" } },
-            new Data { Text = "17 6", Pattern = "HH h", Message = TextErrorMessages.InconsistentValues2, Parameters = {'H', 'h', typeof(LocalDateTime).FullName! }},
-            new Data { Text = "17 AM", Pattern = "HH tt", Message = TextErrorMessages.InconsistentValues2, Parameters = {'H', 't', typeof(LocalDateTime).FullName! }},
+            new Data { Text = "rubbish", Pattern = "yyyyMMddTHH:mm:ss", Message = Messages.Parse_MismatchedNumber, Parameters = { "yyyy" } },
+            new Data { Text = "17 6", Pattern = "HH h", Message = Messages.Parse_InconsistentValues2, Parameters = {'H', 'h', typeof(LocalTime).FullName}},
+            new Data { Text = "17 AM", Pattern = "HH tt", Message = Messages.Parse_InconsistentValues2, Parameters = {'H', 't', typeof(LocalTime).FullName}},
         };
 
         internal static Data[] ParseOnlyData = {
         };
 
         internal static Data[] FormatOnlyData = {
-            // Custom template with "wrong" year; this won't roundtrip
-            new Data(1970, 6, 19, 12, 0, 0) { Template = Instant.FromUtc(1950, 1, 1, 0, 0), Text = "06-19 12:00", Pattern = "MM-dd HH:mm" }
         };
 
         [Test]
         public void IsoHandlesCommas()
         {
-            Instant expected = Instant.FromUtc(2012, 1, 1, 0, 0) + Duration.Epsilon;
-            Instant actual = InstantPattern.ExtendedIso.Parse("2012-01-01T00:00:00,000000001Z").Value;
-            Assert.AreEqual(expected, actual);
+            Instant expected = Instant.FromUtc(2012, 1, 1, 0, 0) + Duration.FromTicks(1);
+            Instant actual = InstantPattern.ExtendedIsoPattern.Parse("2012-01-01T00:00:00,0000001Z").Value;
+            Assert.AreEqual(actual, expected);
         }
 
         [Test]
-        public void CreateWithCurrentCulture()
+        public void NullLabels()
         {
-            using (CultureSaver.SetCultures(Cultures.DotTimeSeparator))
-            {
-                var pattern = InstantPattern.CreateWithCurrentCulture("HH:mm:ss");
-                var text = pattern.Format(Instant.FromUtc(2000, 1, 1, 12, 34, 56));
-                Assert.AreEqual("12.34.56", text);
-            }
+            Assert.Throws<ArgumentNullException>(() => InstantPattern.GeneralPattern.WithMinMaxLabels(null, "x"));
+            Assert.Throws<ArgumentNullException>(() => InstantPattern.GeneralPattern.WithMinMaxLabels("x", null));
         }
 
-        [Test]
-        public void Create()
+        [TestCase("", "x")]
+        [TestCase("x", "")]
+        [TestCase("same", "same")]
+        public void BadLabels(string min, string max)
         {
-            var pattern = InstantPattern.Create("HH:mm:ss", Cultures.DotTimeSeparator);
-            var text = pattern.Format(Instant.FromUtc(2000, 1, 1, 12, 34, 56));
-            Assert.AreEqual("12.34.56", text);
+            Assert.Throws<ArgumentException>(() => InstantPattern.GeneralPattern.WithMinMaxLabels(min, max));
         }
 
         [Test]
-        public void ParseNull() => AssertParseNull(InstantPattern.General);
+        public void Format_CustomLabels()
+        {
+            var pattern = InstantPattern.GeneralPattern.WithMinMaxLabels("min", "max");
+            Assert.AreEqual("min", pattern.Format(Instant.MinValue));
+            Assert.AreEqual("max", pattern.Format(Instant.MaxValue));
+            Assert.AreEqual(InstantPattern.GeneralPattern.Format(NodaConstants.UnixEpoch),
+                pattern.Format(NodaConstants.UnixEpoch));
+        }
+
+        [Test]
+        public void Parse_CustomLabels()
+        {
+            var pattern = InstantPattern.GeneralPattern.WithMinMaxLabels("min", "max");
+            Assert.AreEqual(Instant.MinValue, pattern.Parse("min").Value);
+            Assert.AreEqual(Instant.MaxValue, pattern.Parse("max").Value);
+            Assert.AreEqual(NodaConstants.UnixEpoch,
+                pattern.Parse(InstantPattern.GeneralPattern.Format(NodaConstants.UnixEpoch)).Value);
+        }
+
+        [Test]
+        public void OutOfRange_Low()
+        {
+            var ticks = CalendarSystem.Iso.MinTicks - 1;
+            var formatted = InstantPattern.ExtendedIsoPattern.Format(new Instant(ticks));
+            StringAssert.StartsWith(InstantPattern.OutOfRangeLabel, formatted);
+        }
+
+        [Test]
+        public void OutOfRange_High()
+        {
+            var ticks = CalendarSystem.Iso.MaxTicks + 1;
+            var formatted = InstantPattern.ExtendedIsoPattern.Format(new Instant(ticks));
+            StringAssert.StartsWith(InstantPattern.OutOfRangeLabel, formatted);
+        }
+
+        [Test]
+        public void Extremities()
+        {
+            AssertRoundTrip(new Instant(CalendarSystem.Iso.MinTicks), InstantPattern.ExtendedIsoPattern);
+            AssertRoundTrip(new Instant(CalendarSystem.Iso.MaxTicks), InstantPattern.ExtendedIsoPattern);
+        }
 
         /// <summary>
         /// Common test data for both formatting and parsing. A test should be placed here unless is truly
         /// cannot be run both ways. This ensures that as many round-trip type tests are performed as possible.
         /// </summary>
         internal static readonly Data[] FormatAndParseData = {
-            new Data(2012, 1, 31, 17, 36, 45) { Text = "2012-01-31T17:36:45", Pattern = "uuuu-MM-dd'T'HH:mm:ss" },
-            // Check that unquoted T still works.
-            new Data(2012, 1, 31, 17, 36, 45) { Text = "2012-01-31T17:36:45", Pattern = "uuuu-MM-ddTHH:mm:ss" },
-            new Data(2012, 4, 28, 0, 0, 0) { Text = "2012 avr. 28", Pattern = "uuuu MMM dd", Culture = Cultures.FrFr },
-            new Data { Text = " 1970 ", Pattern = " uuuu " },
-            new Data(Instant.MinValue) { Text = "-9998-01-01T00:00:00Z", Pattern = "uuuu-MM-dd'T'HH:mm:ss.FFFFFFFFF'Z'" },
-            new Data(Instant.MaxValue) { Text = "9999-12-31T23:59:59.999999999Z", Pattern = "uuuu-MM-dd'T'HH:mm:ss.FFFFFFFFF'Z'" },
-
-            // General pattern has no standard single character.
-            new Data(2012, 1, 31, 17, 36, 45) { StandardPattern = InstantPattern.General, Text = "2012-01-31T17:36:45Z", Pattern = "uuuu-MM-ddTHH:mm:ss'Z'" },
-
-            // Custom template
-            new Data(1950, 6, 19, 12, 0, 0) { Template = Instant.FromUtc(1950, 1, 1, 0, 0), Text = "06-19 12:00", Pattern = "MM-dd HH:mm" }
+            new Data(2012, 1, 31, 17, 36, 45) { Text = "2012-01-31T17:36:45", Pattern = "yyyy-MM-ddTHH:mm:ss" },
+            new Data(2012, 4, 28, 0, 0, 0) { Text = "2012 avr. 28", Pattern = "yyyy MMM dd", Culture = Cultures.FrFr },
+            new Data { Text = " 1970 ", Pattern = " yyyy " }
         };
 
         internal static IEnumerable<Data> ParseData = ParseOnlyData.Concat(FormatAndParseData);
@@ -96,9 +121,13 @@ namespace NodaTime.Test.Text
         /// </summary>
         public sealed class Data : PatternTestData<Instant>
         {
-            protected override Instant DefaultTemplate => NodaConstants.UnixEpoch;
+            protected override Instant DefaultTemplate
+            {
+                get { return NodaConstants.UnixEpoch; }
+            }
 
-            public Data(Instant value) : base(value)
+            public Data(Instant value)
+                : base(value)
             {
             }
 
@@ -107,12 +136,16 @@ namespace NodaTime.Test.Text
             {
             }
 
-            public Data() : this(NodaConstants.UnixEpoch)
+            public Data()
+                : this(NodaConstants.UnixEpoch)
             {
             }
 
-            internal override IPattern<Instant> CreatePattern() =>
-                InstantPattern.CreateWithInvariantCulture(Pattern!).WithTemplateValue(Template).WithCulture(Culture);
+            internal override IPattern<Instant> CreatePattern()
+            {
+                return InstantPattern.CreateWithInvariantCulture(Pattern)
+                    .WithCulture(Culture);
+            }
         }
     }
 }

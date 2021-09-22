@@ -72,9 +72,9 @@ namespace NodaTime.Test
         [Test]
         public void PlusTicks_Simple()
         {
-            LocalTime start = LocalTime.FromHourMinuteSecondMillisecondTick(12, 15, 8, 300, 7500);
-            LocalTime expectedForward = LocalTime.FromHourMinuteSecondMillisecondTick(12, 15, 8, 301, 1500);
-            LocalTime expectedBackward = LocalTime.FromHourMinuteSecondMillisecondTick(12, 15, 8, 300, 3500);
+            LocalTime start = new LocalTime(12, 15, 8, 300, 7500);
+            LocalTime expectedForward = new LocalTime(12, 15, 8, 301, 1500);
+            LocalTime expectedBackward = new LocalTime(12, 15, 8, 300, 3500);
             Assert.AreEqual(expectedForward, start.PlusTicks(4000));
             Assert.AreEqual(expectedBackward, start.PlusTicks(-4000));
         }
@@ -82,32 +82,13 @@ namespace NodaTime.Test
         [Test]
         public void PlusTicks_Long()
         {
-            Assert.IsTrue(NodaConstants.TicksPerDay > int.MaxValue);
+            Assert.IsTrue(NodaConstants.TicksPerStandardDay > int.MaxValue);
             LocalTime start = new LocalTime(12, 15, 8);
             LocalTime expectedForward = new LocalTime(12, 15, 9);
             LocalTime expectedBackward = new LocalTime(12, 15, 7);
-            Assert.AreEqual(expectedForward, start.PlusTicks(NodaConstants.TicksPerDay + NodaConstants.TicksPerSecond));
-            Assert.AreEqual(expectedBackward, start.PlusTicks(-NodaConstants.TicksPerDay - NodaConstants.TicksPerSecond));
+            Assert.AreEqual(expectedForward, start.PlusTicks(NodaConstants.TicksPerStandardDay + NodaConstants.TicksPerSecond));
+            Assert.AreEqual(expectedBackward, start.PlusTicks(-NodaConstants.TicksPerStandardDay - NodaConstants.TicksPerSecond));
         }
 
-        [Test]
-        public void With()
-        {
-            LocalTime start = LocalTime.FromHourMinuteSecondMillisecondTick(12, 15, 8, 100, 1234);
-            LocalTime expected = new LocalTime(12, 15, 8);
-            Assert.AreEqual(expected, start.With(TimeAdjusters.TruncateToSecond));
-        }
-
-        [Test]
-        public void PlusMinutes_WouldOverflowNaively()
-        {
-            LocalTime start = new LocalTime(12, 34, 56);
-            // Very big value, which just wraps round a *lot* and adds one minute.
-            // There's no way we could compute that many nanoseconds.
-            long value = (NodaConstants.NanosecondsPerDay << 15) + 1;
-            LocalTime expected = new LocalTime(12, 35, 56);
-            LocalTime actual = start.PlusMinutes(value);
-            Assert.AreEqual(expected, actual);
-        }
     }
 }

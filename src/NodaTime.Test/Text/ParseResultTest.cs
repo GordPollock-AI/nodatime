@@ -8,6 +8,7 @@ using NUnit.Framework;
 
 namespace NodaTime.Test.Text
 {
+    [TestFixture]
     public class ParseResultTest
     {
         private static readonly ParseResult<int> FailureResult = ParseResult<int>.ForInvalidValue(new ValueCursor("text"), "text");
@@ -55,21 +56,23 @@ namespace NodaTime.Test.Text
         public void TryGetValue_Success()
         {
             ParseResult<int> result = ParseResult<int>.ForValue(5);
-            Assert.IsTrue(result.TryGetValue(-1, out int actual));
+            int actual;
+            Assert.IsTrue(result.TryGetValue(-1, out actual));
             Assert.AreEqual(5, actual);
         }
 
         [Test]
         public void TryGetValue_Failure()
         {
-            Assert.IsFalse(FailureResult.TryGetValue(-1, out int actual));
+            int actual;
+            Assert.IsFalse(FailureResult.TryGetValue(-1, out actual));
             Assert.AreEqual(-1, actual);
         }
 
         [Test]
         public void Convert_ForFailureResult()
         {
-            ParseResult<string> converted = FailureResult.Convert(x => $"xx{x}xx");
+            ParseResult<string> converted = FailureResult.Convert(x => "xx" + x + "xx");
             Assert.Throws<UnparsableValueException>(() => converted.GetValueOrThrow());
         }
 
@@ -77,7 +80,7 @@ namespace NodaTime.Test.Text
         public void Convert_ForSuccessResult()
         {
             ParseResult<int> original = ParseResult<int>.ForValue(10);
-            ParseResult<string> converted = original.Convert(x => $"xx{x}xx");
+            ParseResult<string> converted = original.Convert(x => "xx" + x + "xx");
             Assert.AreEqual("xx10xx", converted.Value);
         }
 
@@ -93,15 +96,6 @@ namespace NodaTime.Test.Text
         {
             ParseResult<int> original = ParseResult<int>.ForValue(10);
             Assert.Throws<InvalidOperationException>(() => original.ConvertError<string>());            
-        }
-
-        [Test]
-        public void ForException()
-        {
-            Exception e = new Exception();
-            ParseResult<int> result = ParseResult<int>.ForException(() => e);
-            Assert.IsFalse(result.Success);
-            Assert.AreSame(e, result.Exception);
         }
     }
 }
