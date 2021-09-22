@@ -2,7 +2,6 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-
 namespace NodaTime.Calendars
 {
     /// <summary>
@@ -17,7 +16,7 @@ namespace NodaTime.Calendars
     /// </para>
     /// <para>
     /// While the patterns themselves are reasonably commonly documented (see e.g.
-    /// <a href="https://en.wikipedia.org/wiki/Tabular_Islamic_calendar">Wikipedia</a>)
+    /// <a href="http://en.wikipedia.org/wiki/Tabular_Islamic_calendar">Wikipedia</a>)
     /// there is little standardization in terms of naming the patterns. I hope the current names do not
     /// cause offence to anyone; suggestions for better names would be welcome.
     /// </para>
@@ -34,8 +33,7 @@ namespace NodaTime.Calendars
         /// <summary>
         /// A pattern of leap years in 2, 5, 7, 10, 13, 16, 18, 21, 24, 26 and 29.
         /// This pattern and <see cref="Base15"/> are the most commonly used ones,
-        /// and only differ in whether the 15th or 16th year is deemed leap. This is
-        /// the pattern used by the BCL HijriCalendar.
+        /// and only differ in whether the 15th or 16th year is deemed leap.
         /// </summary>
         Base16 = 2,
         /// <summary>

@@ -2,14 +2,8 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using NodaTime.Annotations;
 using System;
-
-// Standard exception constructors.
-// This exception is expected to be constructed within the library.
-// We always have a message, and we don't want to accidentally be able
-// to construct an instance of this exception without a message.
-#pragma warning disable CA1032
+using NodaTime.Annotations;
 
 namespace NodaTime.Utility
 {
@@ -18,15 +12,16 @@ namespace NodaTime.Utility
     /// data which is truncated, i.e. we expect more data than we can read.
     /// </summary>
     /// <remarks>
-    /// This type only exists as <c>InvalidDataException</c> didn't exist in Portable Class Libraries.
-    /// That does exist in netstandard1.3, but as we shipped 2.0 without realizing this, we're stuck with the
-    /// new exception type.
+    /// This type only exists as <c>InvalidDataException</c> doesn't exist in the Portable Class Library.
     /// Unfortunately, <c>InvalidDataException</c> itself is sealed, so we can't derive from it for the sake
     /// of backward compatibility.
     /// </remarks>
     /// <threadsafety>Any public static members of this type are thread safe. Any instance members are not guaranteed to be thread safe.
     /// See the thread safety section of the user guide for more information.
     /// </threadsafety>
+#if !PCL
+    [Serializable]
+#endif
     [Mutable] // Exception itself is mutable
     public sealed class InvalidNodaDataException : Exception
     {

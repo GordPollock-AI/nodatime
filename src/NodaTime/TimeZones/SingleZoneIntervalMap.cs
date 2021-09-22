@@ -17,6 +17,9 @@ namespace NodaTime.TimeZones
             this.interval = interval;
         }
 
-        public ZoneInterval GetZoneInterval(Instant instant) => interval;
+        public ZoneInterval GetZoneInterval(Instant instant)
+        {
+            return interval;
+        }
     }
 }

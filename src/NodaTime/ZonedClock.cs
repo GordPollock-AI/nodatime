@@ -4,6 +4,7 @@
 using JetBrains.Annotations;
 using NodaTime.Annotations;
 using NodaTime.Utility;
+using System;
 
 namespace NodaTime
 {
@@ -15,17 +16,9 @@ namespace NodaTime
     [Immutable]
     public sealed class ZonedClock : IClock
     {
-        /// <summary>Gets the clock used to provide the current instant.</summary>
-        /// <value>The clock associated with this zoned clock.</value>
-        public IClock Clock { get; }
-
-        /// <summary>Gets the time zone used when converting the current instant into a zone-sensitive value.</summary>
-        /// <value>The time zone associated with this zoned clock.</value>
-        public DateTimeZone Zone { get; }
-
-        /// <summary>Gets the calendar system used when converting the current instant into a calendar-sensitive value.</summary>
-        /// <value>The calendar system associated with this zoned clock.</value>
-        public CalendarSystem Calendar { get; }
+        private readonly IClock clock;
+        private readonly DateTimeZone zone;
+        private readonly CalendarSystem calendar;
 
         /// <summary>
         /// Creates a new <see cref="ZonedClock"/> with the given clock, time zone and calendar system.
@@ -33,18 +26,25 @@ namespace NodaTime
         /// <param name="clock">Clock to use to obtain instants.</param>
         /// <param name="zone">Time zone to adjust instants into.</param>
         /// <param name="calendar">Calendar system to use.</param>
-        public ZonedClock(IClock clock, DateTimeZone zone, CalendarSystem calendar)
+        public ZonedClock([NotNull] IClock clock, [NotNull] DateTimeZone zone, [NotNull] CalendarSystem calendar)
         {
-            Clock = Preconditions.CheckNotNull(clock, nameof(clock));
-            Zone = Preconditions.CheckNotNull(zone, nameof(zone));
-            Calendar = Preconditions.CheckNotNull(calendar, nameof(calendar));
+            this.clock = Preconditions.CheckNotNull(clock, nameof(clock));
+            this.zone = Preconditions.CheckNotNull(zone, nameof(zone));
+            this.calendar = Preconditions.CheckNotNull(calendar, nameof(calendar));
         }
+
+        /// <summary>
+        /// Explicit interface implementation of <see cref="IClock.Now"/>; use
+        /// <see cref="GetCurrentInstant()"/> in preference.
+        /// </summary>
+        [Obsolete("Use the GetCurrentInstant() extension method for compatibility with 2.0")]
+        Instant IClock.Now => GetCurrentInstant();
 
         /// <summary>
         /// Returns the current instant provided by the underlying clock.
         /// </summary>
         /// <returns>The current instant provided by the underlying clock.</returns>
-        public Instant GetCurrentInstant() => Clock.GetCurrentInstant();
+        public Instant GetCurrentInstant() => clock.GetCurrentInstant();
 
         /// <summary>
         /// Returns the current instant provided by the underlying clock, adjusted
@@ -53,7 +53,7 @@ namespace NodaTime
         /// <returns>The current instant provided by the underlying clock, adjusted to the
         /// time zone of this object.</returns>
         [Pure]
-        public ZonedDateTime GetCurrentZonedDateTime() => GetCurrentInstant().InZone(Zone, Calendar);
+        public ZonedDateTime GetCurrentZonedDateTime() => GetCurrentInstant().InZone(zone, calendar);
 
         /// <summary>
         /// Returns the local date/time of the current instant provided by the underlying clock, adjusted

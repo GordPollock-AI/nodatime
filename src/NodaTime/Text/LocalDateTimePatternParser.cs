@@ -2,9 +2,10 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using NodaTime.Globalization;
-using NodaTime.Text.Patterns;
 using System.Collections.Generic;
+using NodaTime.Globalization;
+using NodaTime.Properties;
+using NodaTime.Text.Patterns;
 
 namespace NodaTime.Text
 {
@@ -15,7 +16,7 @@ namespace NodaTime.Text
     {
         // Split the template value into date and time once, to avoid doing it every time we parse.
         private readonly LocalDate templateValueDate;
-        private readonly LocalTime templateValueTime;
+        private readonly LocalTime templateValueTime;       
 
         private static readonly Dictionary<char, CharacterHandler<LocalDateTime, LocalDateTimeParseBucket>> PatternCharacterHandlers =
             new Dictionary<char, CharacterHandler<LocalDateTime, LocalDateTimeParseBucket>>
@@ -25,16 +26,15 @@ namespace NodaTime.Text
             { '\"', SteppedPatternBuilder<LocalDateTime, LocalDateTimeParseBucket>.HandleQuote },
             { '\\', SteppedPatternBuilder<LocalDateTime, LocalDateTimeParseBucket>.HandleBackslash },
             { '/', (pattern, builder) => builder.AddLiteral(builder.FormatInfo.DateSeparator, ParseResult<LocalDateTime>.DateSeparatorMismatch) },
-            { 'T', (pattern, builder) => builder.AddLiteral('T', ParseResult<LocalDateTime>.MismatchedCharacter) },
-            { 'y', DatePatternHelper.CreateYearOfEraHandler<LocalDateTime, LocalDateTimeParseBucket>(value => value.YearOfEra, (bucket, value) => bucket.Date.YearOfEra = value) },
-            { 'u', SteppedPatternBuilder<LocalDateTime, LocalDateTimeParseBucket>.HandlePaddedField
-                       (4, PatternFields.Year, -9999, 9999, value => value.Year, (bucket, value) => bucket.Date.Year = value) },
+            { 'y', DatePatternHelper.CreateYearHandler<LocalDateTime, LocalDateTimeParseBucket>(value => value.YearOfCentury, value => value.Year, (bucket, value) => bucket.Date.Year = value) },
+            { 'Y', SteppedPatternBuilder<LocalDateTime, LocalDateTimeParseBucket>.HandlePaddedField
+                       (5, PatternFields.YearOfEra, 0, 99999, value => value.YearOfEra, (bucket, value) => bucket.Date.YearOfEra = value) },
             { 'M', DatePatternHelper.CreateMonthOfYearHandler<LocalDateTime, LocalDateTimeParseBucket>
                         (value => value.Month, (bucket, value) => bucket.Date.MonthOfYearText = value, (bucket, value) => bucket.Date.MonthOfYearNumeric = value) },
             { 'd', DatePatternHelper.CreateDayHandler<LocalDateTime, LocalDateTimeParseBucket>
-                        (value => value.Day, value => (int) value.DayOfWeek, (bucket, value) => bucket.Date.DayOfMonth = value, (bucket, value) => bucket.Date.DayOfWeek = value) },
-            { '.', TimePatternHelper.CreatePeriodHandler<LocalDateTime, LocalDateTimeParseBucket>(9, value => value.NanosecondOfSecond, (bucket, value) => bucket.Time.FractionalSeconds = value) },
-            { ';', TimePatternHelper.CreateCommaDotHandler<LocalDateTime, LocalDateTimeParseBucket>(9, value => value.NanosecondOfSecond, (bucket, value) => bucket.Time.FractionalSeconds = value) },
+                        (value => value.Day, value => value.DayOfWeek, (bucket, value) => bucket.Date.DayOfMonth = value, (bucket, value) => bucket.Date.DayOfWeek = value) },
+            { '.', TimePatternHelper.CreatePeriodHandler<LocalDateTime, LocalDateTimeParseBucket>(7, value => value.TickOfSecond, (bucket, value) => bucket.Time.FractionalSeconds = value) },
+            { ';', TimePatternHelper.CreateCommaDotHandler<LocalDateTime, LocalDateTimeParseBucket>(7, value => value.TickOfSecond, (bucket, value) => bucket.Time.FractionalSeconds = value) },
             { ':', (pattern, builder) => builder.AddLiteral(builder.FormatInfo.TimeSeparator, ParseResult<LocalDateTime>.TimeSeparatorMismatch) },
             { 'h', SteppedPatternBuilder<LocalDateTime, LocalDateTimeParseBucket>.HandlePaddedField
                        (2, PatternFields.Hours12, 1, 12, value => value.ClockHourOfHalfDay, (bucket, value) => bucket.Time.Hours12 = value) },
@@ -44,12 +44,11 @@ namespace NodaTime.Text
                        (2, PatternFields.Minutes, 0, 59, value => value.Minute, (bucket, value) => bucket.Time.Minutes = value) },
             { 's', SteppedPatternBuilder<LocalDateTime, LocalDateTimeParseBucket>.HandlePaddedField
                        (2, PatternFields.Seconds, 0, 59, value => value.Second, (bucket, value) => bucket.Time.Seconds = value) },
-            { 'f', TimePatternHelper.CreateFractionHandler<LocalDateTime, LocalDateTimeParseBucket>(9, value => value.NanosecondOfSecond, (bucket, value) => bucket.Time.FractionalSeconds = value) },
-            { 'F', TimePatternHelper.CreateFractionHandler<LocalDateTime, LocalDateTimeParseBucket>(9, value => value.NanosecondOfSecond, (bucket, value) => bucket.Time.FractionalSeconds = value) },
+            { 'f', TimePatternHelper.CreateFractionHandler<LocalDateTime, LocalDateTimeParseBucket>(7, value => value.TickOfSecond, (bucket, value) => bucket.Time.FractionalSeconds = value) },
+            { 'F', TimePatternHelper.CreateFractionHandler<LocalDateTime, LocalDateTimeParseBucket>(7, value => value.TickOfSecond, (bucket, value) => bucket.Time.FractionalSeconds = value) },
             { 't', TimePatternHelper.CreateAmPmHandler<LocalDateTime, LocalDateTimeParseBucket>(time => time.Hour, (bucket, value) => bucket.Time.AmPm = value) },
             { 'c', DatePatternHelper.CreateCalendarHandler<LocalDateTime, LocalDateTimeParseBucket>(value => value.Calendar, (bucket, value) => bucket.Date.Calendar = value) },
             { 'g', DatePatternHelper.CreateEraHandler<LocalDateTime, LocalDateTimeParseBucket>(value => value.Era, bucket => bucket.Date) },
-            { 'l', (cursor, builder) => builder.AddEmbeddedLocalPartial(cursor, bucket => bucket.Date, bucket => bucket.Time, value => value.Date, value => value.TimeOfDay, null) },
         };
 
         internal LocalDateTimePatternParser(LocalDateTime templateValue)
@@ -65,43 +64,56 @@ namespace NodaTime.Text
             // Nullity check is performed in LocalDateTimePattern.
             if (patternText.Length == 0)
             {
-                throw new InvalidPatternException(TextErrorMessages.FormatStringEmpty);
+                throw new InvalidPatternException(Messages.Parse_FormatStringEmpty);
             }
 
             if (patternText.Length == 1)
             {
-                return patternText[0] switch
+                char patternCharacter = patternText[0];
+                if (patternCharacter == 'o' || patternCharacter == 'O')
                 {
-                    // Invariant standard patterns return cached implementations.
-                    'o' => LocalDateTimePattern.Patterns.BclRoundtripPatternImpl,
-                    'O' => LocalDateTimePattern.Patterns.BclRoundtripPatternImpl,
-                    'r' => LocalDateTimePattern.Patterns.FullRoundtripPatternImpl,
-                    'R' => LocalDateTimePattern.Patterns.FullRoundtripWithoutCalendarImpl,
-                    's' => LocalDateTimePattern.Patterns.GeneralIsoPatternImpl,
-                    'S' => LocalDateTimePattern.Patterns.ExtendedIsoPatternImpl,
-                    // Other standard patterns expand the pattern text to the appropriate custom pattern.
-                    // Note: we don't just recurse, as otherwise a FullDateTimePattern of 'F' would cause a stack overflow.
-                    'f' => ParseNoStandardExpansion($"{formatInfo.DateTimeFormat.LongDatePattern} {formatInfo.DateTimeFormat.ShortTimePattern}"),
-                    'F' => ParseNoStandardExpansion(formatInfo.DateTimeFormat.FullDateTimePattern),
-                    'g' => ParseNoStandardExpansion($"{formatInfo.DateTimeFormat.ShortDatePattern} {formatInfo.DateTimeFormat.ShortTimePattern}"),
-                    'G' => ParseNoStandardExpansion($"{formatInfo.DateTimeFormat.ShortDatePattern} {formatInfo.DateTimeFormat.LongTimePattern}"),
-                    // Unknown standard patterns fail.
-                    _ => throw new InvalidPatternException(TextErrorMessages.UnknownStandardFormat, patternText, typeof(LocalDateTime))
-                };
+                    return LocalDateTimePattern.Patterns.BclRoundtripPatternImpl;
+                }
+                if (patternCharacter == 'r')
+                {
+                    return LocalDateTimePattern.Patterns.FullRoundtripPatternImpl;
+                }
+                if (patternCharacter == 's')
+                {
+                    return LocalDateTimePattern.Patterns.GeneralIsoPatternImpl;
+                }
+                patternText = ExpandStandardFormatPattern(patternCharacter, formatInfo);
+                if (patternText == null)
+                {
+                    throw new InvalidPatternException(Messages.Parse_UnknownStandardFormat, patternCharacter, typeof(LocalDateTime));
+                }
             }
-            return ParseNoStandardExpansion(patternText);
 
-            IPattern<LocalDateTime> ParseNoStandardExpansion(string patternTextLocal)
-            {
-                var patternBuilder = new SteppedPatternBuilder<LocalDateTime, LocalDateTimeParseBucket>(formatInfo,
-                    () => new LocalDateTimeParseBucket(templateValueDate, templateValueTime));
-                patternBuilder.ParseCustomPattern(patternTextLocal, PatternCharacterHandlers);
-                patternBuilder.ValidateUsedFields();
-                return patternBuilder.Build(templateValueDate.At(templateValueTime));
-            }
+            var patternBuilder = new SteppedPatternBuilder<LocalDateTime, LocalDateTimeParseBucket>(formatInfo,
+                () => new LocalDateTimeParseBucket(templateValueDate, templateValueTime));
+            patternBuilder.ParseCustomPattern(patternText, PatternCharacterHandlers);
+            patternBuilder.ValidateUsedFields();
+            return patternBuilder.Build();
         }
 
-
+        private string ExpandStandardFormatPattern(char patternCharacter, NodaFormatInfo formatInfo)
+        {
+            switch (patternCharacter)
+            {
+                case 'f':
+                    return formatInfo.DateTimeFormat.LongDatePattern + " " + formatInfo.DateTimeFormat.ShortTimePattern;
+                case 'F':
+                    return formatInfo.DateTimeFormat.FullDateTimePattern;
+                case 'g':
+                    return formatInfo.DateTimeFormat.ShortDatePattern + " " + formatInfo.DateTimeFormat.ShortTimePattern;
+                case 'G':
+                    return formatInfo.DateTimeFormat.ShortDatePattern + " " + formatInfo.DateTimeFormat.LongTimePattern;
+                default:
+                    // Will be turned into an exception.
+                    return null;
+            }
+        }
+        
         internal sealed class LocalDateTimeParseBucket : ParseBucket<LocalDateTime>
         {
             internal readonly LocalDatePatternParser.LocalDateParseBucket Date;
@@ -135,12 +147,12 @@ namespace NodaTime.Text
                     hour24 = true;
                 }
 
-                ParseResult<LocalDate> dateResult = dateBucket.CalculateValue(usedFields & PatternFields.AllDateFields, text, typeof(LocalDateTime));
+                ParseResult<LocalDate> dateResult = dateBucket.CalculateValue(usedFields & PatternFields.AllDateFields, text);
                 if (!dateResult.Success)
                 {
                     return dateResult.ConvertError<LocalDateTime>();
                 }
-                ParseResult<LocalTime> timeResult = timeBucket.CalculateValue(usedFields & PatternFields.AllTimeFields, text, typeof(LocalDateTime));
+                ParseResult<LocalTime> timeResult = timeBucket.CalculateValue(usedFields & PatternFields.AllTimeFields, text);
                 if (!timeResult.Success)
                 {
                     return timeResult.ConvertError<LocalDateTime>();
@@ -160,8 +172,10 @@ namespace NodaTime.Text
                 return ParseResult<LocalDateTime>.ForValue(date + time);
             }
 
-            internal override ParseResult<LocalDateTime> CalculateValue(PatternFields usedFields, string text) =>
-                CombineBuckets(usedFields, Date, Time, text);
+            internal override ParseResult<LocalDateTime> CalculateValue(PatternFields usedFields, string text)
+            {
+                return CombineBuckets(usedFields, Date, Time, text);
+            }
         }
     }
 }

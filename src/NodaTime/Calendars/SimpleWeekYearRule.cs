@@ -2,9 +2,10 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
+using System;
+using JetBrains.Annotations;
 using NodaTime.Annotations;
 using NodaTime.Utility;
-using System;
 
 namespace NodaTime.Calendars
 {
@@ -35,21 +36,20 @@ namespace NodaTime.Calendars
 
         internal SimpleWeekYearRule(int minDaysInFirstWeek, IsoDayOfWeek firstDayOfWeek, bool irregularWeeks)
         {
-            Preconditions.DebugCheckArgumentRange(nameof(minDaysInFirstWeek), minDaysInFirstWeek, 1, 7);
-            Preconditions.CheckArgumentRange(nameof(firstDayOfWeek), (int) firstDayOfWeek, 1, 7);
+            Preconditions.CheckArgumentRange(nameof(firstDayOfWeek), (int)firstDayOfWeek, 1, 7);
             this.minDaysInFirstWeek = minDaysInFirstWeek;
             this.firstDayOfWeek = firstDayOfWeek;
             this.irregularWeeks = irregularWeeks;
         }
 
         /// <inheritdoc />
-        public LocalDate GetLocalDate(int weekYear, int weekOfWeekYear, IsoDayOfWeek dayOfWeek, CalendarSystem calendar)
+        public LocalDate GetLocalDate(int weekYear, int weekOfWeekYear, IsoDayOfWeek dayOfWeek, [NotNull] CalendarSystem calendar)
         {
             Preconditions.CheckNotNull(calendar, nameof(calendar));
             ValidateWeekYear(weekYear, calendar);
 
             // The actual message for this won't be ideal, but it's clear enough.
-            Preconditions.CheckArgumentRange(nameof(dayOfWeek), (int) dayOfWeek, 1, 7);
+            Preconditions.CheckArgumentRange(nameof(dayOfWeek), (int)dayOfWeek, 1, 7);
 
             var yearMonthDayCalculator = calendar.YearMonthDayCalculator;
             var maxWeeks = GetWeeksInWeekYear(weekYear, calendar);
@@ -57,7 +57,7 @@ namespace NodaTime.Calendars
             {
                 throw new ArgumentOutOfRangeException(nameof(weekOfWeekYear));
             }
-
+            
             unchecked
             {
                 int startOfWeekYear = GetWeekYearDaysSinceEpoch(yearMonthDayCalculator, weekYear);
@@ -69,7 +69,8 @@ namespace NodaTime.Calendars
                     throw new ArgumentOutOfRangeException(nameof(weekYear),
                         $"The combination of {nameof(weekYear)}, {nameof(weekOfWeekYear)} and {nameof(dayOfWeek)} is invalid");
                 }
-                LocalDate ret = new LocalDate(yearMonthDayCalculator.GetYearMonthDay(days).WithCalendar(calendar));
+                LocalInstant localInstant = new LocalInstant(days * NodaConstants.TicksPerDay);
+                LocalDate ret = new LocalDate(new LocalDateTime(localInstant, calendar));
 
                 // For rules with irregular weeks, the calculation so far may end up computing a date which isn't
                 // in the right week-year. This will happen if the caller has specified a "short" week (i.e. one
@@ -95,7 +96,6 @@ namespace NodaTime.Calendars
         /// <inheritdoc />
         public int GetWeekOfWeekYear(LocalDate date)
         {
-            YearMonthDay yearMonthDay = date.YearMonthDay;
             YearMonthDayCalculator yearMonthDayCalculator = date.Calendar.YearMonthDayCalculator;
             // This is a bit inefficient, as we'll be converting forms several times. However, it's
             // understandable... we might want to optimize in the future if it's reported as a bottleneck.
@@ -104,14 +104,14 @@ namespace NodaTime.Calendars
             // having short weeks, that doesn't change the week-of-week-year, as we've definitely
             // got the right week-year to start with.
             int startOfWeekYear = GetWeekYearDaysSinceEpoch(yearMonthDayCalculator, weekYear);
-            int daysSinceEpoch = yearMonthDayCalculator.GetDaysSinceEpoch(yearMonthDay);
+            int daysSinceEpoch = (int) (date.AtMidnight().LocalInstant.Ticks / NodaConstants.TicksPerDay);
             int zeroBasedDayOfWeekYear = daysSinceEpoch - startOfWeekYear;
             int zeroBasedWeek = zeroBasedDayOfWeekYear / 7;
             return zeroBasedWeek + 1;
         }
 
         /// <inheritdoc />
-        public int GetWeeksInWeekYear(int weekYear, CalendarSystem calendar)
+        public int GetWeeksInWeekYear(int weekYear, [NotNull] CalendarSystem calendar)
         {
             Preconditions.CheckNotNull(calendar, nameof(calendar));
             YearMonthDayCalculator yearMonthDayCalculator = calendar.YearMonthDayCalculator;
@@ -119,7 +119,7 @@ namespace NodaTime.Calendars
             unchecked
             {
                 int startOfWeekYear = GetWeekYearDaysSinceEpoch(yearMonthDayCalculator, weekYear);
-                int startOfCalendarYear = yearMonthDayCalculator.GetStartOfYearInDays(weekYear);
+                int startOfCalendarYear = (int) (yearMonthDayCalculator.GetStartOfYearInTicks(weekYear) / NodaConstants.TicksPerDay);
                 // The number of days gained or lost in the week year compared with the calendar year.
                 // So if the week year starts on December 31st of the previous calendar year, this will be +1.
                 // If the week year starts on January 2nd of this calendar year, this will be -1.
@@ -142,14 +142,13 @@ namespace NodaTime.Calendars
         /// <inheritdoc />
         public int GetWeekYear(LocalDate date)
         {
-            YearMonthDay yearMonthDay = date.YearMonthDay;
             YearMonthDayCalculator yearMonthDayCalculator = date.Calendar.YearMonthDayCalculator;
             unchecked
             {
                 // Let's guess that it's in the same week year as calendar year, and check that.
-                int calendarYear = yearMonthDay.Year;
+                int calendarYear = date.Year;
                 int startOfWeekYear = GetWeekYearDaysSinceEpoch(yearMonthDayCalculator, calendarYear);
-                int daysSinceEpoch = yearMonthDayCalculator.GetDaysSinceEpoch(yearMonthDay);
+                int daysSinceEpoch = (int) (date.AtMidnight().LocalInstant.Ticks / NodaConstants.TicksPerDay);
                 if (daysSinceEpoch < startOfWeekYear)
                 {
                     // No, the week-year hadn't started yet. For example, we've been given January 1st 2011...
@@ -205,13 +204,13 @@ namespace NodaTime.Calendars
         /// can be short) it returns the day when the week-year *would* have started if it were regular.
         /// So this *always* returns a date on firstDayOfWeek.
         /// </summary>
-        private int GetWeekYearDaysSinceEpoch(YearMonthDayCalculator yearMonthDayCalculator, [Trusted] int weekYear)
+        private int GetWeekYearDaysSinceEpoch(YearMonthDayCalculator yearMonthDayCalculator, int weekYear)
         {
             unchecked
             {
                 // Need to be slightly careful here, as the week-year can reasonably be (just) outside the calendar year range.
                 // However, YearMonthDayCalculator.GetStartOfYearInDays already handles min/max -/+ 1.
-                int startOfCalendarYear = yearMonthDayCalculator.GetStartOfYearInDays(weekYear);
+                int startOfCalendarYear = (int) (yearMonthDayCalculator.GetStartOfYearInTicks(weekYear) / NodaConstants.TicksPerDay);
                 int startOfYearDayOfWeek = unchecked(startOfCalendarYear >= -3 ? 1 + ((startOfCalendarYear + 3) % 7)
                                            : 7 + ((startOfCalendarYear + 4) % 7));
 
@@ -221,7 +220,7 @@ namespace NodaTime.Calendars
                 // in the previous calendar year.
                 // (For example, if the start of the calendar year is Friday and the first day of the week is Monday,
                 // this will be 4.)
-                int daysIntoWeek = ((startOfYearDayOfWeek - (int) firstDayOfWeek) + 7) % 7;
+                int daysIntoWeek = ((startOfYearDayOfWeek - (int)firstDayOfWeek) + 7) % 7;
                 int startOfWeekContainingStartOfCalendarYear = startOfCalendarYear - daysIntoWeek;
 
                 bool startOfYearIsInWeek1 = (7 - daysIntoWeek >= minDaysInFirstWeek);
@@ -229,6 +228,6 @@ namespace NodaTime.Calendars
                     ? startOfWeekContainingStartOfCalendarYear
                     : startOfWeekContainingStartOfCalendarYear + 7;
             }
-        }
+        }        
     }
 }

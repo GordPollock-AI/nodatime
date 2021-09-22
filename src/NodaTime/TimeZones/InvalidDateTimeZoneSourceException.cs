@@ -2,13 +2,8 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using NodaTime.Annotations;
 using System;
-
-// Standard exception constructors.
-// This exception is expected to be constructed within the library.
-// There are never any inner exceptions, and we always *do* have a message.
-#pragma warning disable CA1032
+using NodaTime.Annotations;
 
 namespace NodaTime.TimeZones
 {
@@ -20,6 +15,9 @@ namespace NodaTime.TimeZones
     /// <threadsafety>Any public static members of this type are thread safe. Any instance members are not guaranteed to be thread safe.
     /// See the thread safety section of the user guide for more information.
     /// </threadsafety>
+#if !PCL
+    [Serializable]
+#endif
     [Mutable] // Exception itself is mutable
     public sealed class InvalidDateTimeZoneSourceException : Exception
     {

@@ -2,12 +2,12 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
+using System;
+using System.Globalization;
 using NodaTime.Annotations;
 using NodaTime.Globalization;
 using NodaTime.Text.Patterns;
 using NodaTime.Utility;
-using System.Globalization;
-using System.Text;
 
 namespace NodaTime.Text
 {
@@ -22,23 +22,48 @@ namespace NodaTime.Text
     [Immutable] // Well, assuming an immutable culture...
     public sealed class InstantPattern : IPattern<Instant>
     {
-        internal static readonly Instant DefaultTemplateValue = Instant.FromUtc(2000, 1, 1, 0, 0);
-
         /// <summary>
-        /// Gets the general pattern, which always uses an invariant culture. The general pattern represents
-        /// an instant as a UTC date/time in ISO-8601 style "uuuu-MM-ddTHH:mm:ss'Z'".
+        /// Default label for <see cref="Instant.MinValue"/> when formatting.
         /// </summary>
-        /// <value>The general pattern, which always uses an invariant culture.</value>
-        public static InstantPattern General => Patterns.GeneralPatternImpl;
+        internal const string DefaultMinLabel = "MinInstant";
 
         /// <summary>
-        /// Gets an invariant instant pattern which is ISO-8601 compatible, providing up to 9 decimal places
+        /// Default label for <see cref="Instant.MaxValue"/> when formatting.
+        /// </summary>
+        internal const string DefaultMaxLabel = "MaxInstant";
+
+        /// <summary>
+        /// Label at the start of any out-of-range value.
+        /// </summary>
+        internal const string OutOfRangeLabel = "Out of formatting range: ";
+
+        /// <summary>
+        /// Returns the general pattern, which always uses an invariant culture. The general pattern represents
+        /// an instant as a UTC date/time in ISO-8601 style "yyyy-MM-ddTHH:mm:ss'Z'".
+        /// </summary>
+        public static InstantPattern General => GeneralPattern;
+
+        /// <summary>
+        /// Returns the general pattern, which always uses an invariant culture. The general pattern represents
+        /// an instant as a UTC date/time in ISO-8601 style "yyyy-MM-ddTHH:mm:ss'Z'".
+        /// </summary>
+        [Obsolete("Use General for compatibility with 2.0")]
+        public static InstantPattern GeneralPattern { get { return Patterns.GeneralPatternImpl; } }
+
+        /// <summary>
+        /// Returns an invariant instant pattern which is ISO-8601 compatible, providing up to 7 decimal places
         /// of sub-second accuracy. (These digits are omitted when unnecessary.)
-        /// This corresponds to the text pattern "uuuu'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFFFF'Z'".
+        /// This corresponds to the text pattern "yyyy'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFF'Z'".
         /// </summary>
-        /// <value>An invariant instant pattern which is ISO-8601 compatible, providing up to 9 decimal places
-        /// of sub-second accuracy.</value>
-        public static InstantPattern ExtendedIso => Patterns.ExtendedIsoPatternImpl;
+        public static InstantPattern ExtendedIso => ExtendedIsoPattern;
+
+        /// <summary>
+        /// Returns an invariant instant pattern which is ISO-8601 compatible, providing up to 7 decimal places
+        /// of sub-second accuracy. (These digits are omitted when unnecessary.)
+        /// This corresponds to the text pattern "yyyy'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFF'Z'".
+        /// </summary>
+        [Obsolete("Use ExtendedIso for compatibility with 2.0")]
+        public static InstantPattern ExtendedIsoPattern { get { return Patterns.ExtendedIsoPatternImpl; } }
 
         private const string DefaultFormatPattern = "g";
 
@@ -50,36 +75,34 @@ namespace NodaTime.Text
         /// </summary>
         private static class Patterns
         {
-            internal static readonly InstantPattern ExtendedIsoPatternImpl = CreateWithInvariantCulture("uuuu'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFFFF'Z'");
-            internal static readonly InstantPattern GeneralPatternImpl = CreateWithInvariantCulture("uuuu-MM-ddTHH:mm:ss'Z'");
+            internal static readonly InstantPattern ExtendedIsoPatternImpl = CreateWithInvariantCulture("yyyy'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFF'Z'");
+            internal static readonly InstantPattern GeneralPatternImpl = CreateWithInvariantCulture("yyyy-MM-ddTHH:mm:ss'Z'");
         }
 
+        private readonly string minLabel;
+        private readonly string maxLabel;
+        private readonly string patternText;
+        private readonly NodaFormatInfo formatInfo;
         private readonly IPattern<Instant> pattern;
 
         /// <summary>
-        /// Gets the pattern text for this pattern, as supplied on creation.
+        /// Returns the pattern text for this pattern, as supplied on creation.
         /// </summary>
-        /// <value>The pattern text for this pattern, as supplied on creation.</value>
-        public string PatternText { get; }
+        public string PatternText { get { return patternText; } }
 
         /// <summary>
-        /// Gets the value used as a template for parsing: any field values unspecified
-        /// in the pattern are taken from the template.
+        /// Returns the localization information used in this pattern.
         /// </summary>
-        /// <value>The value used as a template for parsing.</value>
-        public Instant TemplateValue { get; }
+        internal NodaFormatInfo FormatInfo { get { return formatInfo; } }
 
-        /// <summary>
-        /// Gets the localization information used in this pattern.
-        /// </summary>
-        private NodaFormatInfo FormatInfo { get; }
-
-        private InstantPattern(string patternText, NodaFormatInfo formatInfo, Instant templateValue, IPattern<Instant> pattern)
+        private InstantPattern(string patternText, NodaFormatInfo formatInfo,
+            string minLabel, string maxLabel, IPattern<Instant> pattern)
         {
-            PatternText = patternText;
-            FormatInfo = formatInfo;
-            TemplateValue = templateValue;
+            this.patternText = patternText;
+            this.formatInfo = formatInfo;
             this.pattern = pattern;
+            this.minLabel = minLabel;
+            this.maxLabel = maxLabel;
         }
 
         /// <summary>
@@ -91,40 +114,57 @@ namespace NodaTime.Text
         /// </remarks>
         /// <param name="text">The text value to parse.</param>
         /// <returns>The result of parsing, which may be successful or unsuccessful.</returns>
-        public ParseResult<Instant> Parse([SpecialNullHandling] string text) => pattern.Parse(text);
+        public ParseResult<Instant> Parse(string text)
+        {
+            return pattern.Parse(text);
+        }
 
         /// <summary>
         /// Formats the given instant as text according to the rules of this pattern.
         /// </summary>
         /// <param name="value">The instant to format.</param>
         /// <returns>The instant formatted according to this pattern.</returns>
-        public string Format(Instant value) => pattern.Format(value);
+        public string Format(Instant value)
+        {
+            return pattern.Format(value);
+        }
+
+        private static InstantPattern Create(string patternText, NodaFormatInfo formatInfo, string minLabel, string maxLabel)
+        {
+            Preconditions.CheckNotNull(patternText, "patternText");
+            Preconditions.CheckNotNull(formatInfo, "formatInfo");
+            IPattern<Instant> pattern;
+            // This will be the case the vast majority of the time.
+            if (minLabel == DefaultMinLabel && maxLabel == DefaultMaxLabel)
+            {
+                 pattern = formatInfo.InstantPatternParser.ParsePattern(patternText);
+            }
+            else
+            {
+                Preconditions.CheckNotNull(minLabel, "minLabel");
+                Preconditions.CheckNotNull(maxLabel, "maxLabel");
+                Preconditions.CheckArgument(minLabel != "", "minLabel", "minLabel must be non-empty");
+                Preconditions.CheckArgument(maxLabel != "", "maxLabel", "maxLabel must be non-empty");
+                Preconditions.CheckArgument(minLabel != maxLabel, "minLabel", "minLabel and maxLabel must differ");
+                pattern = new InstantPatternParser(minLabel, maxLabel).ParsePattern(patternText, formatInfo);
+            }
+            return new InstantPattern(patternText, formatInfo, DefaultMinLabel, DefaultMaxLabel, pattern);
+        }
 
         /// <summary>
-        /// Formats the given value as text according to the rules of this pattern,
-        /// appending to the given <see cref="StringBuilder"/>.
-        /// </summary>
-        /// <param name="value">The value to format.</param>
-        /// <param name="builder">The <c>StringBuilder</c> to append to.</param>
-        /// <returns>The builder passed in as <paramref name="builder"/>.</returns>
-        public StringBuilder AppendFormat(Instant value, StringBuilder builder) => pattern.AppendFormat(value, builder);
-
-        /// <summary>
-        /// Creates a pattern for the given pattern text and format info.
+        /// Creates a pattern for the given pattern text and format info. The default
+        /// min/max labels are used.
         /// </summary>
         /// <param name="patternText">Pattern text to create the pattern for</param>
         /// <param name="formatInfo">The format info to use in the pattern</param>
-        /// <param name="templateValue">The template value to use in the pattern</param>
         /// <returns>A pattern for parsing and formatting instants.</returns>
         /// <exception cref="InvalidPatternException">The pattern text was invalid.</exception>
-        private static InstantPattern Create(string patternText, NodaFormatInfo formatInfo, Instant templateValue)
+        private static InstantPattern Create(string patternText, NodaFormatInfo formatInfo)
         {
-            Preconditions.CheckNotNull(patternText, nameof(patternText));
-            Preconditions.CheckNotNull(formatInfo, nameof(formatInfo));
-            // Note: no check for the default template value, as that ends up being done in the
-            // underlying LocalDateTimePattern creation.
-            var pattern = new InstantPatternParser(templateValue).ParsePattern(patternText, formatInfo);
-            return new InstantPattern(patternText, formatInfo, templateValue, pattern);
+            Preconditions.CheckNotNull(patternText, "patternText");
+            Preconditions.CheckNotNull(formatInfo, "formatInfo");
+            var pattern = formatInfo.InstantPatternParser.ParsePattern(patternText);
+            return new InstantPattern(patternText, formatInfo, DefaultMinLabel, DefaultMaxLabel, pattern);
         }
 
         /// <summary>
@@ -137,8 +177,10 @@ namespace NodaTime.Text
         /// <param name="cultureInfo">The culture to use in the pattern</param>
         /// <returns>A pattern for parsing and formatting instants.</returns>
         /// <exception cref="InvalidPatternException">The pattern text was invalid.</exception>
-        public static InstantPattern Create(string patternText, [ValidatedNotNull] CultureInfo cultureInfo) =>
-            Create(patternText, NodaFormatInfo.GetFormatInfo(cultureInfo), DefaultTemplateValue);
+        public static InstantPattern Create(string patternText, CultureInfo cultureInfo)
+        {
+            return Create(patternText, NodaFormatInfo.GetFormatInfo(cultureInfo));
+        }
 
         /// <summary>
         /// Creates a pattern for the given pattern text in the current thread's current culture.
@@ -151,11 +193,14 @@ namespace NodaTime.Text
         /// <param name="patternText">Pattern text to create the pattern for</param>
         /// <returns>A pattern for parsing and formatting instants.</returns>
         /// <exception cref="InvalidPatternException">The pattern text was invalid.</exception>
-        public static InstantPattern CreateWithCurrentCulture(string patternText) =>
-            Create(patternText, NodaFormatInfo.CurrentInfo, DefaultTemplateValue);
+        public static InstantPattern CreateWithCurrentCulture(string patternText)
+        {
+            return Create(patternText, NodaFormatInfo.CurrentInfo);
+        }
 
         /// <summary>
-        /// Creates a pattern for the given pattern text in the invariant culture.
+        /// Creates a pattern for the given pattern text in the invariant culture, using the default
+        /// min/max labels.
         /// </summary>
         /// <remarks>
         /// See the user guide for the available pattern text options.
@@ -163,8 +208,23 @@ namespace NodaTime.Text
         /// <param name="patternText">Pattern text to create the pattern for</param>
         /// <returns>A pattern for parsing and formatting instants.</returns>
         /// <exception cref="InvalidPatternException">The pattern text was invalid.</exception>
-        public static InstantPattern CreateWithInvariantCulture(string patternText) =>
-            Create(patternText, NodaFormatInfo.InvariantInfo, DefaultTemplateValue);
+        public static InstantPattern CreateWithInvariantCulture(string patternText)
+        {
+            return Create(patternText, NodaFormatInfo.InvariantInfo);
+        }
+
+        /// <summary>
+        /// Creates a "numeric" pattern for the given culture. The numeric format gives the
+        /// number of ticks in decimal format, with or without thousands separators.
+        /// </summary>
+        /// <param name="cultureInfo">The culture to use in the pattern</param>
+        /// <param name="includeThousandsSeparators">True to include thousands separators when parsing or formatting; false to omit them.</param>
+        /// <returns>A numeric pattern for the configuration</returns>
+        [Obsolete("Numeric patterns are not supported in 2.0")]
+        public static InstantPattern CreateNumericPattern(CultureInfo cultureInfo, bool includeThousandsSeparators)
+        {
+            return Create(includeThousandsSeparators ? "n" : "d", cultureInfo);
+        }
 
         /// <summary>
         /// Creates a pattern for the same original pattern text as this pattern, but with the specified
@@ -172,7 +232,10 @@ namespace NodaTime.Text
         /// </summary>
         /// <param name="formatInfo">The localization information to use in the new pattern.</param>
         /// <returns>A new pattern with the given localization information.</returns>
-        private InstantPattern WithFormatInfo(NodaFormatInfo formatInfo) => Create(PatternText, formatInfo, TemplateValue);
+        private InstantPattern WithFormatInfo(NodaFormatInfo formatInfo)
+        {
+            return Create(patternText, formatInfo, minLabel, maxLabel);
+        }
 
         /// <summary>
         /// Creates a pattern for the same original pattern text as this pattern, but with the specified
@@ -180,15 +243,23 @@ namespace NodaTime.Text
         /// </summary>
         /// <param name="cultureInfo">The culture to use in the new pattern.</param>
         /// <returns>A new pattern with the given culture.</returns>
-        public InstantPattern WithCulture([ValidatedNotNull] CultureInfo cultureInfo) =>
-            WithFormatInfo(NodaFormatInfo.GetFormatInfo(cultureInfo));
+        public InstantPattern WithCulture(CultureInfo cultureInfo)
+        {
+            return WithFormatInfo(NodaFormatInfo.GetFormatInfo(cultureInfo));
+        }
 
         /// <summary>
-        /// Creates a pattern like this one, but with the specified template value.
+        /// Creates a new pattern for the same original pattern text and culture as this pattern, but
+        /// with the given min/max labels.
         /// </summary>
-        /// <param name="newTemplateValue">The template value for the new pattern, used to fill in unspecified fields.</param>
-        /// <returns>A new pattern with the given template value.</returns>
-        public InstantPattern WithTemplateValue(Instant newTemplateValue) =>
-            Create(PatternText, FormatInfo, newTemplateValue);
+        /// <param name="minLabel">Text to use for <see cref="Instant.MinValue"/>. Must be non-empty, and not the same as <paramref name="maxLabel"/>.</param>
+        /// <param name="maxLabel">Text to use for <see cref="Instant.MaxValue"/>. Must be non-empty, and not the same as <paramref name="minLabel"/></param>
+        /// <returns>A new pattern with the given min/max labels.</returns>
+        /// <exception cref="ArgumentException"></exception>
+        [Obsolete("Start/end of time instants are not supported in 2.0")]
+        public InstantPattern WithMinMaxLabels(string minLabel, string maxLabel)
+        {
+            return Create(patternText, formatInfo, minLabel, maxLabel);
+        }
     }
 }

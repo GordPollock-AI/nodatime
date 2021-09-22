@@ -2,11 +2,11 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using NodaTime.Annotations;
-using NodaTime.Utility;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using NodaTime.Annotations;
+using NodaTime.Utility;
 
 namespace NodaTime.TimeZones
 {
@@ -21,7 +21,7 @@ namespace NodaTime.TimeZones
     /// <see cref="WithOptions"/> method.
     /// </remarks>
     [Immutable]
-    public sealed class ZoneEqualityComparer : IEqualityComparer<DateTimeZone?>
+    public sealed class ZoneEqualityComparer : IEqualityComparer<DateTimeZone>
     {
         /// <summary>
         /// Options to use when comparing time zones for equality. Each option makes the comparison more restrictive.
@@ -114,16 +114,16 @@ namespace NodaTime.TimeZones
         /// Returns the interval over which this comparer operates.
         /// </summary>
         [VisibleForTesting]
-        internal Interval IntervalForTest => interval;
+        internal Interval IntervalForTest { get { return interval; } }
 
         /// <summary>
         /// Returns the options used by this comparer.
         /// </summary>
         [VisibleForTesting]
-        internal Options OptionsForTest => options;
+        internal Options OptionsForTest { get { return options; } }
 
         private readonly ZoneIntervalEqualityComparer zoneIntervalComparer;
-
+        
         /// <summary>
         /// Creates a new comparer for the given interval, with the given comparison options.
         /// </summary>
@@ -136,7 +136,7 @@ namespace NodaTime.TimeZones
             this.options = options;
             if ((options & ~Options.StrictestMatch) != 0)
             {
-                throw new ArgumentOutOfRangeException(nameof(options), $"The value {options} is not defined within ZoneEqualityComparer.Options");
+                throw new ArgumentOutOfRangeException("The value " + options + " is not defined within ZoneEqualityComparer.Options");
             }
             zoneIntervalComparer = new ZoneIntervalEqualityComparer(options, interval);
         }
@@ -149,12 +149,10 @@ namespace NodaTime.TimeZones
         /// offsets at all points within a given interval.
         /// To specify non-default options, call the <see cref="WithOptions"/> method on the result
         /// of this method.</remarks>
-        /// <param name="interval">The interval over which to compare time zones. This must have both a start and an end.</param>
+        /// <param name="interval">The interval over which to compare time zones.</param>
         /// <returns>A ZoneEqualityComparer for the given interval with the default options.</returns>
         public static ZoneEqualityComparer ForInterval(Interval interval)
         {
-            Preconditions.CheckArgument(interval.HasStart && interval.HasEnd, nameof(interval),
-                "The interval must have both a start and an end.");
             return new ZoneEqualityComparer(interval, Options.OnlyMatchWallOffset);
         }
 
@@ -179,13 +177,13 @@ namespace NodaTime.TimeZones
         /// <param name="x">The first <see cref="DateTimeZone"/> to compare.</param>
         /// <param name="y">The second <see cref="DateTimeZone"/> to compare.</param>
         /// <returns><c>true</c> if the specified time zones are equal under the options and interval of this comparer; otherwise, <c>false</c>.</returns>
-        public bool Equals(DateTimeZone? x, DateTimeZone? y)
+        public bool Equals(DateTimeZone x, DateTimeZone y)
         {
             if (ReferenceEquals(x, y))
             {
                 return true;
             }
-            if (x is null || y is null)
+            if (ReferenceEquals(x, null) || ReferenceEquals(y, null))
             {
                 return false;
             }
@@ -205,13 +203,13 @@ namespace NodaTime.TimeZones
         /// </remarks>
         /// <param name="obj">The time zone to compute a hash code for.</param>
         /// <returns>A hash code for the specified object.</returns>
-        public int GetHashCode(DateTimeZone? obj)
+        public int GetHashCode(DateTimeZone obj)
         {
-            Preconditions.CheckNotNull(obj!, nameof(obj));
+            Preconditions.CheckNotNull(obj, "obj");
             unchecked
             {
                 int hash = 19;
-                foreach (var zoneInterval in GetIntervals(obj!))
+                foreach (var zoneInterval in GetIntervals(obj))
                 {
                     hash = hash * 31 + zoneIntervalComparer.GetHashCode(zoneInterval);
                 }
@@ -222,10 +220,37 @@ namespace NodaTime.TimeZones
         private IEnumerable<ZoneInterval> GetIntervals(DateTimeZone zone)
         {
             var allIntervals = zone.GetZoneIntervals(interval.Start, interval.End);
-            return CheckOption(options, Options.MatchAllTransitions) ? allIntervals : zoneIntervalComparer.CoalesceIntervals(allIntervals);
+            return CheckOption(options, Options.MatchAllTransitions) ? allIntervals : CoalesceIntervals(allIntervals);
         }
 
-        internal sealed class ZoneIntervalEqualityComparer : IEqualityComparer<ZoneInterval>
+        private IEnumerable<ZoneInterval> CoalesceIntervals(IEnumerable<ZoneInterval> zoneIntervals)
+        {
+            ZoneInterval current = null;
+            foreach (var zoneInterval in zoneIntervals)
+            {
+                if (current == null)
+                {
+                    current = zoneInterval;
+                    continue;
+                }
+                if (zoneIntervalComparer.EqualExceptStartAndEnd(current, zoneInterval))
+                {
+                    current = current.WithEnd(zoneInterval.End);
+                }
+                else
+                {
+                    yield return current;
+                    current = zoneInterval;
+                }
+            }
+            // current will only be null if start == end...
+            if (current != null)
+            {
+                yield return current;
+            }
+        }
+
+        private sealed class ZoneIntervalEqualityComparer : IEqualityComparer<ZoneInterval>
         {
             private readonly Options options;
             private readonly Interval interval;
@@ -234,33 +259,6 @@ namespace NodaTime.TimeZones
             {
                 this.options = options;
                 this.interval = interval;
-            }
-
-            internal IEnumerable<ZoneInterval> CoalesceIntervals(IEnumerable<ZoneInterval> zoneIntervals)
-            {
-                ZoneInterval? current = null;
-                foreach (var zoneInterval in zoneIntervals)
-                {
-                    if (current is null)
-                    {
-                        current = zoneInterval;
-                        continue;
-                    }
-                    if (EqualExceptStartAndEnd(current, zoneInterval))
-                    {
-                        current = current.WithEnd(zoneInterval.RawEnd);
-                    }
-                    else
-                    {
-                        yield return current;
-                        current = zoneInterval;
-                    }
-                }
-                // current will only be null if start == end...
-                if (current != null)
-                {
-                    yield return current;
-                }
             }
 
             public bool Equals(ZoneInterval x, ZoneInterval y)
@@ -275,36 +273,43 @@ namespace NodaTime.TimeZones
 
             public int GetHashCode(ZoneInterval obj)
             {
-                var hash = HashCodeHelper.Initialize();
+                int hash = HashCodeHelper.Initialize();
                 if (CheckOption(options, Options.MatchOffsetComponents))
                 {
-                    hash = hash.Hash(obj.StandardOffset).Hash(obj.Savings);
+                    hash = HashCodeHelper.Hash(hash, obj.StandardOffset);
+                    hash = HashCodeHelper.Hash(hash, obj.Savings);
                 }
                 else
                 {
-                    hash = hash.Hash(obj.WallOffset);
+                    hash = HashCodeHelper.Hash(hash, obj.WallOffset);
                 }
                 if (CheckOption(options, Options.MatchNames))
                 {
-                    hash = hash.Hash(obj.Name);
+                    hash = HashCodeHelper.Hash(hash, obj.Name);
                 }
-                return hash.Hash(GetEffectiveStart(obj)).Hash(GetEffectiveEnd(obj)).Value;
+                hash = HashCodeHelper.Hash(hash, GetEffectiveStart(obj));
+                hash = HashCodeHelper.Hash(hash, GetEffectiveEnd(obj));
+                return hash;
             }
 
-            private Instant GetEffectiveStart(ZoneInterval zoneInterval) =>
-                CheckOption(options, Options.MatchStartAndEndTransitions)
-                    ? zoneInterval.RawStart : Instant.Max(zoneInterval.RawStart, interval.Start);
+            private Instant GetEffectiveStart(ZoneInterval zoneInterval)
+            {
+                return CheckOption(options, Options.MatchStartAndEndTransitions)
+                    ? zoneInterval.Start : Instant.Max(zoneInterval.Start, interval.Start);                
+            }
 
-            private Instant GetEffectiveEnd(ZoneInterval zoneInterval) =>
-                CheckOption(options, Options.MatchStartAndEndTransitions)
-                    ? zoneInterval.RawEnd : Instant.Min(zoneInterval.RawEnd, interval.End);
+            private Instant GetEffectiveEnd(ZoneInterval zoneInterval)
+            {
+                return CheckOption(options, Options.MatchStartAndEndTransitions)
+                    ? zoneInterval.End : Instant.Min(zoneInterval.End, interval.End);
+            }
 
             /// <summary>
             /// Compares the parts of two zone intervals which are deemed "interesting" by the options.
             /// The wall offset is always compared, regardless of options, but the start/end points are
             /// never compared.
             /// </summary>
-            private bool EqualExceptStartAndEnd(ZoneInterval x, ZoneInterval y)
+            internal bool EqualExceptStartAndEnd(ZoneInterval x, ZoneInterval y)
             {
                 if (x.WallOffset != y.WallOffset)
                 {

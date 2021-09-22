@@ -44,8 +44,9 @@ namespace NodaTime.Text.Patterns
                         }
 
                         // If there *was* a decimal separator, we should definitely have a number.
-                        // Last argument is 1 because we need at least one digit after the decimal separator
-                        if (!valueCursor.ParseFraction(count, maxCount, out int fractionalSeconds, 1))
+                        int fractionalSeconds;
+                        // Last argument is false because we don't need *all* the digits to be present
+                        if (!valueCursor.ParseFraction(count, maxCount, out fractionalSeconds, false))
                         {
                             return ParseResult<TResult>.MismatchedNumber(valueCursor, new string('F', count));
                         }
@@ -95,8 +96,9 @@ namespace NodaTime.Text.Patterns
                         }
 
                         // If there *was* a decimal separator, we should definitely have a number.
-                        // Last argument is 1 because we need at least one digit to be present after a decimal separator
-                        if (!valueCursor.ParseFraction(count, maxCount, out int fractionalSeconds, 1))
+                        int fractionalSeconds;
+                        // Last argument is false because we don't need *all* the digits to be present
+                        if (!valueCursor.ParseFraction(count, maxCount, out fractionalSeconds, false))
                         {
                             return ParseResult<TResult>.MismatchedNumber(valueCursor, new string('F', count));
                         }
@@ -109,8 +111,8 @@ namespace NodaTime.Text.Patterns
                 }
                 else
                 {
-                    builder.AddParseAction((str, bucket) => str.Match('.') || str.Match(',')
-                                                            ? null
+                    builder.AddParseAction((str, bucket) => str.Match('.') || str.Match(',') 
+                                                            ? null 
                                                             : ParseResult<TResult>.MismatchedCharacter(str, ';'));
                     builder.AddFormatAction((value, sb) => sb.Append('.'));
                 }
@@ -129,12 +131,13 @@ namespace NodaTime.Text.Patterns
                 char patternCharacter = pattern.Current;
                 int count = pattern.GetRepeatCount(maxCount);
                 builder.AddField(PatternFields.FractionalSeconds, pattern.Current);
-
+                
                 builder.AddParseAction((str, bucket) =>
                 {
+                    int fractionalSeconds;
                     // If the pattern is 'f', we need exactly "count" digits. Otherwise ('F') we need
                     // "up to count" digits.
-                    if (!str.ParseFraction(count, maxCount, out int fractionalSeconds, patternCharacter == 'f' ? count : 0))
+                    if (!str.ParseFraction(count, maxCount, out fractionalSeconds, patternCharacter == 'f'))
                     {
                         return ParseResult<TResult>.MismatchedNumber(str, new string(patternCharacter, count));
                     }
@@ -167,7 +170,7 @@ namespace NodaTime.Text.Patterns
 
                 // If we don't have an AM or PM designator, we're nearly done. Set the AM/PM designator
                 // to the special value of 2, meaning "take it from the template".
-                if (amDesignator.Length == 0 && pmDesignator.Length == 0)
+                if (amDesignator == "" && pmDesignator == "")
                 {
                     builder.AddParseAction((str, bucket) =>
                     {
@@ -178,9 +181,9 @@ namespace NodaTime.Text.Patterns
                 }
                 // Odd scenario (but present in af-ZA for .NET 2) - exactly one of the AM/PM designator is valid.
                 // Delegate to a separate method to keep this clearer...
-                if (amDesignator.Length == 0 || pmDesignator.Length == 0)
+                if (amDesignator == "" || pmDesignator == "")
                 {
-                    int specifiedDesignatorValue = amDesignator.Length == 0 ? 1 : 0;
+                    int specifiedDesignatorValue = amDesignator == "" ? 1 : 0;
                     string specifiedDesignator = specifiedDesignatorValue == 1 ? pmDesignator : amDesignator;
                     HandleHalfAmPmDesignator(count, specifiedDesignator, specifiedDesignatorValue, hourOfDayGetter, amPmSetter, builder);
                     return;

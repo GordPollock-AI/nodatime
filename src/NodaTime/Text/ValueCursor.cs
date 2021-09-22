@@ -2,8 +2,6 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using NodaTime.Annotations;
-using NodaTime.Utility;
 using System;
 using System.Globalization;
 
@@ -113,7 +111,7 @@ namespace NodaTime.Text
         /// <param name="result">The result integer value. The value of this is not guaranteed
         /// to be anything specific if the return value is non-null.</param>
         /// <returns>null if the digits were parsed, or the appropriate parse failure</returns>
-        internal ParseResult<T>? ParseInt64<T>(out long result)
+        internal ParseResult<T> ParseInt64<T>(out long result)
         {
             unchecked
             {
@@ -197,49 +195,6 @@ namespace NodaTime.Text
         }
 
         /// <summary>
-        /// Parses digits at the current point in the string, as an <see cref="Int64"/> value.
-        /// If the minimum required
-        /// digits are not present then the index is unchanged. If there are more digits than
-        /// the maximum allowed they are ignored.
-        /// </summary>
-        /// <param name="minimumDigits">The minimum allowed digits.</param>
-        /// <param name="maximumDigits">The maximum allowed digits.</param>
-        /// <param name="result">The result integer value. The value of this is not guaranteed
-        /// to be anything specific if the return value is false.</param>
-        /// <returns><c>true</c> if the digits were parsed.</returns>
-        internal bool ParseInt64Digits(int minimumDigits, int maximumDigits, out long result)
-        {
-            unchecked
-            {
-                result = 0;
-                int localIndex = Index;
-                int maxIndex = localIndex + maximumDigits;
-                if (maxIndex >= Length)
-                {
-                    maxIndex = Length;
-                }
-                for (; localIndex < maxIndex; localIndex++)
-                {
-                    // Optimized digit handling: rather than checking for the range, returning -1
-                    // and then checking whether the result is -1, we can do both checks at once.
-                    int digit = Value[localIndex] - '0';
-                    if (digit < 0 || digit > 9)
-                    {
-                        break;
-                    }
-                    result = result * 10 + digit;
-                }
-                int count = localIndex - Index;
-                if (count < minimumDigits)
-                {
-                    return false;
-                }
-                Move(localIndex);
-                return true;
-            }
-        }
-
-        /// <summary>
         /// Parses digits at the current point in the string. If the minimum required
         /// digits are not present then the index is unchanged. If there are more digits than
         /// the maximum allowed they are ignored.
@@ -260,7 +215,7 @@ namespace NodaTime.Text
                 {
                     maxIndex = Length;
                 }
-                for (; localIndex < maxIndex; localIndex++)
+                for (;  localIndex < maxIndex; localIndex++)
                 {
                     // Optimized digit handling: rather than checking for the range, returning -1
                     // and then checking whether the result is -1, we can do both checks at once.
@@ -283,29 +238,37 @@ namespace NodaTime.Text
 
         /// <summary>
         /// Parses digits at the current point in the string as a fractional value.
+        /// At least one digit must be present, if allRequired is false there's no requirement for *all*
+        /// the digits to be present.
         /// </summary>
-        /// <param name="maximumDigits">The maximum allowed digits. Trusted to be less than or equal to scale.</param>
+        /// <param name="maximumDigits">The maximum allowed digits.</param>
         /// <param name="scale">The scale of the fractional value.</param>
         /// <param name="result">The result value scaled by scale. The value of this is not guaranteed
         /// to be anything specific if the return value is false.</param>
-        /// <param name="minimumDigits">The minimum number of digits that must be specified in the value.</param>
+        /// <param name="allRequired">If true, <paramref name="maximumDigits"/> digits must be present in the
+        /// input sequence. If false, there must be just at least one digit.</param>
         /// <returns><c>true</c> if the digits were parsed.</returns>
-        internal bool ParseFraction([Trusted] int maximumDigits, int scale, out int result, int minimumDigits)
+        internal bool ParseFraction(int maximumDigits, int scale, out int result, bool allRequired)
         {
             unchecked
             {
-                Preconditions.DebugCheckArgument(maximumDigits <= scale, nameof(maximumDigits),
-                    "Must not allow more maximum digits than scale");
+                if (scale < maximumDigits)
+                {
+                    scale = maximumDigits;
+                }
 
                 result = 0;
                 int localIndex = Index;
-                int minIndex = localIndex + minimumDigits;
-                if (minIndex > Length)
+                int maxIndex = localIndex + maximumDigits;
+                if (maxIndex > Length)
                 {
                     // If we don't have all the digits we're meant to have, we can't possibly succeed.
-                    return false;
+                    if (allRequired)
+                    {
+                        return false;
+                    }
+                    maxIndex = Length;
                 }
-                int maxIndex = Math.Min(localIndex + maximumDigits, Length);
                 for (; localIndex < maxIndex; localIndex++)
                 {
                     // Optimized digit handling: rather than checking for the range, returning -1
@@ -318,14 +281,19 @@ namespace NodaTime.Text
                     result = result * 10 + digit;
                 }
                 int count = localIndex - Index;
-                // Couldn't parse the minimum number of digits required?
-                if (count < minimumDigits)
+                // Couldn't parse any digits?
+                if (count == 0)
                 {
                     return false;
                 }
                 result = (int) (result * Math.Pow(10.0, scale - count));
-                Move(localIndex);
-                return true;
+                bool ret = !allRequired || localIndex == maxIndex;
+                // Only move the cursor on success.
+                if (ret)
+                {
+                    Move(localIndex);
+                }
+                return ret;
             }
         }
 

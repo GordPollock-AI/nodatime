@@ -2,6 +2,7 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
+using System;
 using NodaTime.Annotations;
 
 namespace NodaTime.Calendars
@@ -19,63 +20,62 @@ namespace NodaTime.Calendars
         /// <summary>
         /// The "Common" era (CE), also known as Anno Domini (AD). This is used in the ISO, Gregorian and Julian calendars.
         /// </summary>
-        /// <value>The "Common" era (CE), also known as Anno Domini (AD).</value>
-        public static Era Common { get; } = new Era("CE", "Eras_Common");
+        public static readonly Era Common = new Era("CE", "Eras_Common"); // CE
 
         /// <summary>
         /// The "before common" era (BCE), also known as Before Christ (BC). This is used in the ISO, Gregorian and Julian calendars.
         /// </summary>
-        /// <value>The "before common" era (BCE), also known as Before Christ (BC).</value>
-        public static Era BeforeCommon { get; } = new Era("BCE", "Eras_BeforeCommon");
+        public static readonly Era BeforeCommon = new Era("BCE", "Eras_BeforeCommon"); // BCE
 
         /// <summary>
         /// The "Anno Martyrum" or "Era of the Martyrs". This is the sole era used in the Coptic calendar.
         /// </summary>
-        /// <value>The "Anno Martyrum" or "Era of the Martyrs".</value>
-        public static Era AnnoMartyrum { get; } = new Era("AM", "Eras_AnnoMartyrum");
+        public static readonly Era AnnoMartyrum = new Era("AM", "Eras_AnnoMartyrum"); // AM
+
+        /// <summary>
+        /// The "Anno Martyrum" or "Era of the Martyrs". This is the sole era used in the Coptic calendar.
+        /// </summary>
+        [Obsolete("Use AnnoMartyrum instead. This field's name was a typo, and it will be removed in a future release.")]
+        public static readonly Era AnnoMartyrm = AnnoMartyrum;
 
         /// <summary>
         /// The "Anno Hegira" era. This is the sole era used in the Hijri (Islamic) calendar.
         /// </summary>
-        /// <value>The "Anno Hegira" era.</value>
-        public static Era AnnoHegirae { get; } = new Era("EH", "Eras_AnnoHegirae");
+        public static readonly Era AnnoHegirae = new Era("EH", "Eras_AnnoHegirae"); // AH
 
         /// <summary>
         /// The "Anno Mundi" era. This is the sole era used in the Hebrew calendar.
         /// </summary>
-        /// <value>The "Anno Mundi" era.</value>
-        public static Era AnnoMundi { get; } = new Era("AM", "Eras_AnnoMundi");
-
+        public static readonly Era AnnoMundi = new Era("AM", "Eras_AnnoMundi"); // AM
+        
         /// <summary>
         /// The "Anno Persico" era. This is the sole era used in the Persian calendar.
         /// </summary>
-        /// <value>The "Anno Persico" era.</value>
-        public static Era AnnoPersico { get; } = new Era("AP", "Eras_AnnoPersico");
+        public static readonly Era AnnoPersico = new Era("AP", "Eras_AnnoPersico"); // AP
 
-        /// <summary>
-        /// The "Bahá'í" era. This is the sole era used in the Badi calendar.
-        /// </summary>
-        /// <value>The "Bahá'í" era.</value>
-        public static Era Bahai { get; } = new Era("BE", "Eras_Bahai");
+        private readonly string name;
+        private readonly string resourceIdentifier;
 
-        internal string ResourceIdentifier { get; }
+        internal string ResourceIdentifier { get { return resourceIdentifier; } }
+
+        internal Era(string name, string resourceIdentifier)
+        {
+            this.name = name;
+            this.resourceIdentifier = resourceIdentifier;
+        }
 
         /// <summary>
         /// Returns the name of this era, e.g. "CE" or "BCE".
         /// </summary>
-        /// <value>The name of this era.</value>
-        public string Name { get; }
-
-        internal Era(string name, string resourceIdentifier)
-        {
-            this.Name = name;
-            this.ResourceIdentifier = resourceIdentifier;
-        }
+        public string Name { get { return name; } }
 
         /// <summary>
         /// Returns the name of this era.
         /// </summary>
         /// <returns>The name of this era.</returns>
-        public override string ToString() => Name;
+        public override string ToString()
+        {
+            return name;
+        }
     }
 }

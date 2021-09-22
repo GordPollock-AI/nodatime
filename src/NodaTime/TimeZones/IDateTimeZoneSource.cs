@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using JetBrains.Annotations;
 
 namespace NodaTime.TimeZones
 {
@@ -56,13 +57,10 @@ namespace NodaTime.TimeZones
 
         /// <summary>
         /// Returns an appropriate version ID for diagnostic purposes, which must not be null.
-        /// </summary>
-        /// <remarks>
         /// This doesn't have any specific format; it's solely for diagnostic purposes.
         /// The included sources return strings of the format "source identifier: source version" indicating where the
         /// information comes from and which version of the source information has been loaded.
-        /// </remarks>
-        /// <value>An appropriate version ID for diagnostic purposes.</value>
+        /// </summary>
         string VersionId { get; }
 
         /// <summary>
@@ -92,15 +90,17 @@ namespace NodaTime.TimeZones
         /// returned by <see cref="GetIds"/>.</param>
         /// <returns>The <see cref="DateTimeZone"/> for the given ID.</returns>
         /// <exception cref="ArgumentException"><paramref name="id"/> is not supported by this source.</exception>
-        DateTimeZone ForId(string id);
+        DateTimeZone ForId([NotNull] string id);
 
         /// <summary>
-        /// Returns this source's ID for the system default time zone.
+        /// Returns this source's corresponding ID for the given BCL time zone.
         /// </summary>
+        /// <param name="timeZone">The BCL time zone, which must be a known system time zone.</param>
         /// <returns>
-        /// The ID for the system default time zone for this source,
-        /// or null if the system default time zone has no mapping in this source.
+        /// The ID for the given system time zone for this source, or null if the system time
+        /// zone has no mapping in this source.
         /// </returns>
-        string? GetSystemDefaultId();
+        [Obsolete("Only the system default time zone can be mapped in 2.0, using GetSystemDefaultId. For other time zones, use source-specific members.")]
+        string MapTimeZoneId(TimeZoneInfo timeZone);
     }
 }

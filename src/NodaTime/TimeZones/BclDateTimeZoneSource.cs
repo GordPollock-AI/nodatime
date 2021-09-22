@@ -3,6 +3,7 @@
 // as found in the LICENSE.txt file.
 
 using NodaTime.Annotations;
+#if !PCL
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,22 +20,13 @@ namespace NodaTime.TimeZones
     /// (i.e. "UTC" and "UTC+/-Offset").
     /// </para>
     /// <para>
-    /// In Noda Time 1.x and 2.x, this class is only available on the .NET Framework builds of Noda Time, and not the
-    /// PCL (Noda Time 1.x) or .NET Standard 1.3 (Noda Time 2.x) builds.
+    /// This class is not available in the PCL version.
     /// </para>
     /// </remarks>
     /// <threadsafety>This type maintains no state, and all members are thread-safe. See the thread safety section of the user guide for more information.</threadsafety>
     [Immutable]
     public sealed class BclDateTimeZoneSource : IDateTimeZoneSource
     {
-        /// <summary>
-        /// Constructs a new instance. This is rarely useful in application code, as this class has no state of its own.
-        /// Most application code should use <see cref="DateTimeZoneProviders.Bcl"/>.
-        /// </summary>
-        public BclDateTimeZoneSource()
-        {
-        }
-
         /// <summary>
         /// Returns the IDs of all system time zones.
         /// </summary>
@@ -43,8 +35,8 @@ namespace NodaTime.TimeZones
         {
             // Always include the local time zone, since Mono may not include it in the list of system time zones, even
             // though it allows the Id to be passed to FindSystemTimeZoneById().
-            // See https://github.com/nodatime/nodatime/issues/235.
-            return TimeZoneInfoInterceptor.GetSystemTimeZones()
+            // See https://code.google.com/p/noda-time/issues/detail?id=235.
+            return TimeZoneInfo.GetSystemTimeZones()
                 .Select(zone => zone.Id)
                 .Union(GetTimeZoneInfoLocalIdOrEmpty());
         }
@@ -61,13 +53,13 @@ namespace NodaTime.TimeZones
             {
                 // May throw TimeZoneNotFoundException, particularly on Mono/Windows.
                 // See https://bugzilla.xamarin.com/show_bug.cgi?id=11817
-                var local = TimeZoneInfoInterceptor.Local;
+                var local = TimeZoneInfo.Local;
 
-                if (local != null)  // https://github.com/nodatime/nodatime/issues/235#issuecomment-80932079
+                if (local != null)  // https://code.google.com/p/noda-time/issues/detail?id=235#c8
                 {
                     // Make sure we can look it up again, as there are legitimate cases where the local time zone is not
                     // a system time zone.  If not, this also throws TimeZoneNotFoundException.
-                    TimeZoneInfoInterceptor.FindSystemTimeZoneById(local.Id);
+                    TimeZoneInfo.FindSystemTimeZoneById(local.Id);
 
                     return new[] { local.Id };
                 }
@@ -83,7 +75,10 @@ namespace NodaTime.TimeZones
         /// This source returns a string such as "TimeZoneInfo: 3.5.0.0" corresponding to the version of the assembly
         /// containing <see cref="TimeZoneInfo"/>.
         /// </remarks>
-        public string VersionId => $"TimeZoneInfo: {typeof(TimeZoneInfo).Assembly.GetName().Version}";
+        public string VersionId
+        {
+            get { return "TimeZoneInfo: " + typeof(TimeZoneInfo).Assembly.GetName().Version; }
+        }
 
         /// <summary>
         /// Creates a new instance of <see cref="BclDateTimeZone" /> from the <see cref="TimeZoneInfo"/> with the given
@@ -95,11 +90,11 @@ namespace NodaTime.TimeZones
         /// zones returned by this implementation are instances of <see cref="BclDateTimeZone"/> (rather than the built-in
         /// fixed offset zones).
         /// </remarks>        
-        DateTimeZone IDateTimeZoneSource.ForId(string id) => ForId(id);
+        DateTimeZone IDateTimeZoneSource.ForId(string id)
+        {
+            return ForId(id);
+        }
 
-// Even though this member could be static, it would be inconsistent with the interface member.
-// It would also be a breaking change.
-#pragma warning disable CA1822 // Make this member static
         /// <summary>
         /// Creates a new instance of <see cref="BclDateTimeZone" /> from the <see cref="TimeZoneInfo"/> with the given
         /// ID. The ID must be a known system time zone ID.
@@ -111,21 +106,28 @@ namespace NodaTime.TimeZones
         {
             try
             {
-                TimeZoneInfo zone = TimeZoneInfoInterceptor.FindSystemTimeZoneById(id);
+                TimeZoneInfo zone = TimeZoneInfo.FindSystemTimeZoneById(id);
                 return BclDateTimeZone.FromTimeZoneInfo(zone);
             }
             catch (TimeZoneNotFoundException)
-            {
-                throw new ArgumentException(id + " is not a system time zone ID", nameof(id));
+            {                
+                throw new ArgumentException(id + " is not a system time zone ID", "id");
             }
         }
-#pragma warning restore CA1822
 
-        // Note: if TimeZoneInfo.Local returns a null reference, we'll return a null reference here as well.
-        // However, we *don't* attempt to validate that a non-null reference has a valid ID that can be looked up.
-        // We'll let the DateTimeZoneCache do that for us. (We get a DateTimeZoneNotFoundException either way.)
-
-        /// <inheritdoc />
-        public string? GetSystemDefaultId() => TimeZoneInfoInterceptor.Local?.Id;
+        /// <summary>
+        /// Maps the BCL ID to "our" ID as an identity projection.
+        /// </summary>
+        /// <param name="timeZone">The BCL time zone, which must be a known system time zone.</param>
+        /// <returns>
+        /// The ID for the given BCL time zone for this source; that is, the value of the <c>Id</c> property of the
+        /// passed-in <see cref="TimeZoneInfo"/>.
+        /// </returns>
+        [Obsolete("Only the system default time zone can be mapped in 2.0, using GetSystemDefaultId. For other time zones, use source-specific members.")]
+        public string MapTimeZoneId(TimeZoneInfo timeZone)
+        {
+            return timeZone.Id;
+        }
     }
 }
+#endif

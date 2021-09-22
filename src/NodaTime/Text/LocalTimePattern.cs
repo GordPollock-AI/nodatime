@@ -2,12 +2,12 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
+using System.Globalization;
 using NodaTime.Annotations;
 using NodaTime.Globalization;
 using NodaTime.Text.Patterns;
 using NodaTime.Utility;
-using System.Globalization;
-using System.Text;
+using System;
 
 namespace NodaTime.Text
 {
@@ -23,32 +23,19 @@ namespace NodaTime.Text
     public sealed class LocalTimePattern : IPattern<LocalTime>
     {
         /// <summary>
-        /// Gets an invariant local time pattern which is ISO-8601 compatible, providing up to 9 decimal places.
+        /// Returns an invariant local time pattern which is ISO-8601 compatible, providing up to 7 decimal places.
         /// (These digits are omitted when unnecessary.)
-        /// This corresponds to the text pattern "HH':'mm':'ss;FFFFFFFFF".
+        /// This corresponds to the text pattern "HH':'mm':'ss;FFFFFFF".
         /// </summary>
-        /// <remarks>
-        /// This pattern corresponds to the 'o' standard pattern.
-        /// </remarks>
-        /// <value>An invariant local time pattern which is ISO-8601 compatible, providing up to 9 decimal places.</value>
-        public static LocalTimePattern ExtendedIso => Patterns.ExtendedIsoPatternImpl;
+        public static LocalTimePattern ExtendedIso => ExtendedIsoPattern;
 
         /// <summary>
-        /// Gets an invariant local time pattern which is ISO-8601 compatible, providing exactly 9 decimal places.
-        /// This corresponds to the text pattern "HH':'mm':'ss;fffffffff".
+        /// Returns an invariant local time pattern which is ISO-8601 compatible, providing up to 7 decimal places.
+        /// (These digits are omitted when unnecessary.)
+        /// This corresponds to the text pattern "HH':'mm':'ss;FFFFFFF".
         /// </summary>
-        /// <remarks>
-        /// This pattern corresponds to the 'O' standard pattern.
-        /// </remarks>
-        /// <value>An invariant local time pattern which is ISO-8601 compatible, providing exactly 9 decimal places.</value>
-        public static LocalTimePattern LongExtendedIso => Patterns.LongExtendedIsoPatternImpl;
-
-        /// <summary>
-        /// Gets an invariant local time pattern which is ISO-8601 compatible, with precision of just seconds.
-        /// This corresponds to the text pattern "HH':'mm':'ss".
-        /// </summary>
-        /// <value>An invariant local time pattern which is ISO-8601 compatible, with no sub-second precision.</value>
-        public static LocalTimePattern GeneralIso => Patterns.GeneralIsoPatternImpl;
+        [Obsolete("Use ExtendedIso for compatibility with 2.0")]
+        public static LocalTimePattern ExtendedIsoPattern { get { return Patterns.ExtendedIsoPatternImpl; } }
 
         private const string DefaultFormatPattern = "T"; // Long
 
@@ -59,43 +46,38 @@ namespace NodaTime.Text
         /// Class whose existence is solely to avoid type initialization order issues, most of which stem
         /// from needing NodaFormatInfo.InvariantInfo...
         /// </summary>
-        internal static class Patterns
+        private static class Patterns
         {
-            internal static readonly LocalTimePattern ExtendedIsoPatternImpl = CreateWithInvariantCulture("HH':'mm':'ss;FFFFFFFFF");
-            internal static readonly LocalTimePattern LongExtendedIsoPatternImpl = CreateWithInvariantCulture("HH':'mm':'ss;fffffffff");
-            internal static readonly LocalTimePattern GeneralIsoPatternImpl = CreateWithInvariantCulture("HH':'mm':'ss");
+            internal static readonly LocalTimePattern ExtendedIsoPatternImpl = CreateWithInvariantCulture("HH':'mm':'ss;FFFFFFF");
         }
 
-        /// <summary>
-        /// Returns the pattern that this object delegates to. Mostly useful to avoid this public class
-        /// implementing an internal interface.
-        /// </summary>
-        internal IPartialPattern<LocalTime> UnderlyingPattern { get; }
+        private readonly string patternText;
+        private readonly NodaFormatInfo formatInfo;
+        private readonly IPattern<LocalTime> pattern;
+        private readonly LocalTime templateValue;
 
         /// <summary>
-        /// Gets the pattern text for this pattern, as supplied on creation.
+        /// Returns the pattern text for this pattern, as supplied on creation.
         /// </summary>
-        /// <value>The pattern text for this pattern, as supplied on creation.</value>
-        public string PatternText { get; }
+        public string PatternText { get { return patternText; } }
 
         /// <summary>
-        /// Gets the localization information used in this pattern.
+        /// Returns the localization information used in this pattern.
         /// </summary>
-        private NodaFormatInfo FormatInfo { get; }
+        internal NodaFormatInfo FormatInfo { get { return formatInfo; } }
 
         /// <summary>
-        /// Gets the value used as a template for parsing: any field values unspecified
+        /// Returns the value used as a template for parsing: any field values unspecified
         /// in the pattern are taken from the template.
         /// </summary>
-        /// <value>The value used as a template for parsing.</value>
-        public LocalTime TemplateValue { get; }
+        public LocalTime TemplateValue { get { return templateValue; } }
 
-        private LocalTimePattern(string patternText, NodaFormatInfo formatInfo, LocalTime templateValue, IPartialPattern<LocalTime> pattern)
+        private LocalTimePattern(string patternText, NodaFormatInfo formatInfo, LocalTime templateValue, IPattern<LocalTime> pattern)
         {
-            PatternText = patternText;
-            FormatInfo = formatInfo;
-            TemplateValue = templateValue;
-            UnderlyingPattern = pattern;
+            this.patternText = patternText;
+            this.formatInfo = formatInfo;
+            this.pattern = pattern;
+            this.templateValue = templateValue;
         }
 
         /// <summary>
@@ -107,23 +89,20 @@ namespace NodaTime.Text
         /// </remarks>
         /// <param name="text">The text value to parse.</param>
         /// <returns>The result of parsing, which may be successful or unsuccessful.</returns>
-        public ParseResult<LocalTime> Parse([SpecialNullHandling] string text) => UnderlyingPattern.Parse(text);
+        public ParseResult<LocalTime> Parse(string text)
+        {
+            return pattern.Parse(text);
+        }
 
         /// <summary>
         /// Formats the given local time as text according to the rules of this pattern.
         /// </summary>
         /// <param name="value">The local time to format.</param>
         /// <returns>The local time formatted according to this pattern.</returns>
-        public string Format(LocalTime value) => UnderlyingPattern.Format(value);
-
-        /// <summary>
-        /// Formats the given value as text according to the rules of this pattern,
-        /// appending to the given <see cref="StringBuilder"/>.
-        /// </summary>
-        /// <param name="value">The value to format.</param>
-        /// <param name="builder">The <c>StringBuilder</c> to append to.</param>
-        /// <returns>The builder passed in as <paramref name="builder"/>.</returns>
-        public StringBuilder AppendFormat(LocalTime value, StringBuilder builder) => UnderlyingPattern.AppendFormat(value, builder);
+        public string Format(LocalTime value)
+        {
+            return pattern.Format(value);
+        }
 
         /// <summary>
         /// Creates a pattern for the given pattern text, format info, and template value.
@@ -133,20 +112,15 @@ namespace NodaTime.Text
         /// <param name="templateValue">Template value to use for unspecified fields</param>
         /// <returns>A pattern for parsing and formatting local times.</returns>
         /// <exception cref="InvalidPatternException">The pattern text was invalid.</exception>
-        internal static LocalTimePattern Create(string patternText, NodaFormatInfo formatInfo,
-            LocalTime templateValue)
+        private static LocalTimePattern Create(string patternText, NodaFormatInfo formatInfo, LocalTime templateValue)
         {
-            Preconditions.CheckNotNull(patternText, nameof(patternText));
-            Preconditions.CheckNotNull(formatInfo, nameof(formatInfo));
+            Preconditions.CheckNotNull(patternText, "patternText");
+            Preconditions.CheckNotNull(formatInfo, "formatInfo");
             // Use the "fixed" parser for the common case of the default template value.
-            var pattern = templateValue == LocalTime.Midnight
+            var pattern = templateValue == LocalTime.Midnight 
                 ? formatInfo.LocalTimePatternParser.ParsePattern(patternText)
                 : new LocalTimePatternParser(templateValue).ParsePattern(patternText, formatInfo);
-            // If ParsePattern returns a standard pattern instance, we need to get the underlying partial pattern.
-            // (Alternatively, we could just return it directly, instead of creating a new object.)
-            pattern = (pattern as LocalTimePattern)?.UnderlyingPattern ?? pattern;
-            var partialPattern = (IPartialPattern<LocalTime>) pattern;
-            return new LocalTimePattern(patternText, formatInfo, templateValue, partialPattern);
+            return new LocalTimePattern(patternText, formatInfo, templateValue, pattern);
         }
 
         /// <summary>
@@ -160,8 +134,10 @@ namespace NodaTime.Text
         /// <param name="templateValue">Template value to use for unspecified fields</param>
         /// <returns>A pattern for parsing and formatting local times.</returns>
         /// <exception cref="InvalidPatternException">The pattern text was invalid.</exception>
-        public static LocalTimePattern Create(string patternText, [ValidatedNotNull] CultureInfo cultureInfo, LocalTime templateValue) =>
-            Create(patternText, NodaFormatInfo.GetFormatInfo(cultureInfo), templateValue);
+        public static LocalTimePattern Create(string patternText, CultureInfo cultureInfo, LocalTime templateValue)
+        {
+            return Create(patternText, NodaFormatInfo.GetFormatInfo(cultureInfo), templateValue);
+        }
 
         /// <summary>
         /// Creates a pattern for the given pattern text and culture, with a template value of midnight.
@@ -173,8 +149,10 @@ namespace NodaTime.Text
         /// <param name="cultureInfo">The culture to use in the pattern</param>
         /// <returns>A pattern for parsing and formatting local times.</returns>
         /// <exception cref="InvalidPatternException">The pattern text was invalid.</exception>
-        public static LocalTimePattern Create(string patternText, CultureInfo cultureInfo) =>
-            Create(patternText, cultureInfo, LocalTime.Midnight);
+        public static LocalTimePattern Create(string patternText, CultureInfo cultureInfo)
+        {
+            return Create(patternText, cultureInfo, LocalTime.Midnight);
+        }
 
         /// <summary>
         /// Creates a pattern for the given pattern text in the current thread's current culture.
@@ -187,8 +165,10 @@ namespace NodaTime.Text
         /// <param name="patternText">Pattern text to create the pattern for</param>
         /// <returns>A pattern for parsing and formatting local times.</returns>
         /// <exception cref="InvalidPatternException">The pattern text was invalid.</exception>
-        public static LocalTimePattern CreateWithCurrentCulture(string patternText) =>
-            Create(patternText, NodaFormatInfo.CurrentInfo, LocalTime.Midnight);
+        public static LocalTimePattern CreateWithCurrentCulture(string patternText)
+        {
+            return Create(patternText, NodaFormatInfo.CurrentInfo, LocalTime.Midnight);
+        }
 
         /// <summary>
         /// Creates a pattern for the given pattern text in the invariant culture.
@@ -201,17 +181,21 @@ namespace NodaTime.Text
         /// <param name="patternText">Pattern text to create the pattern for</param>
         /// <returns>A pattern for parsing and formatting local times.</returns>
         /// <exception cref="InvalidPatternException">The pattern text was invalid.</exception>
-        public static LocalTimePattern CreateWithInvariantCulture(string patternText) =>
-            Create(patternText, NodaFormatInfo.InvariantInfo, LocalTime.Midnight);
+        public static LocalTimePattern CreateWithInvariantCulture(string patternText)
+        {
+            return Create(patternText, NodaFormatInfo.InvariantInfo, LocalTime.Midnight);
+        }
 
         /// <summary>
         /// Creates a pattern for the same original pattern text as this pattern, but with the specified
         /// localization information.
         /// </summary>
-        /// <param name="formatInfo">The localization information to use in the new pattern.</param>
+        /// <param name="newFormatInfo">The localization information to use in the new pattern.</param>
         /// <returns>A new pattern with the given localization information.</returns>
-        private LocalTimePattern WithFormatInfo(NodaFormatInfo formatInfo) =>
-            Create(PatternText, formatInfo, TemplateValue);
+        private LocalTimePattern WithFormatInfo(NodaFormatInfo newFormatInfo)
+        {
+            return Create(patternText, newFormatInfo, templateValue);
+        }
 
         /// <summary>
         /// Creates a pattern for the same original pattern text as this pattern, but with the specified
@@ -219,15 +203,19 @@ namespace NodaTime.Text
         /// </summary>
         /// <param name="cultureInfo">The culture to use in the new pattern.</param>
         /// <returns>A new pattern with the given culture.</returns>
-        public LocalTimePattern WithCulture([ValidatedNotNull] CultureInfo cultureInfo) =>
-            WithFormatInfo(NodaFormatInfo.GetFormatInfo(cultureInfo));
+        public LocalTimePattern WithCulture(CultureInfo cultureInfo)
+        {
+            return WithFormatInfo(NodaFormatInfo.GetFormatInfo(cultureInfo));
+        }
 
         /// <summary>
         /// Creates a pattern like this one, but with the specified template value.
         /// </summary>
         /// <param name="newTemplateValue">The template value for the new pattern, used to fill in unspecified fields.</param>
         /// <returns>A new pattern with the given template value.</returns>
-        public LocalTimePattern WithTemplateValue(LocalTime newTemplateValue) =>
-            Create(PatternText, FormatInfo, newTemplateValue);
+        public LocalTimePattern WithTemplateValue(LocalTime newTemplateValue)
+        {
+            return Create(patternText, formatInfo, newTemplateValue);
+        }
     }
 }

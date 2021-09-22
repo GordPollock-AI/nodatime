@@ -2,16 +2,9 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
+using System;
 using NodaTime.Annotations;
 using NodaTime.Utility;
-using System;
-
-// Standard exception constructors: we don't *want* those constructors.
-// The single constructor provided in this class populates the message and
-// accepts the required parameters for populating other properties.
-// There are never any other causes to the exception, at least that I can
-// envisage for the moment.
-#pragma warning disable CA1032
 
 namespace NodaTime
 {
@@ -41,32 +34,34 @@ namespace NodaTime
     /// <threadsafety>Any public static members of this type are thread safe. Any instance members are not guaranteed to be thread safe.
     /// See the thread safety section of the user guide for more information.
     /// </threadsafety>
+#if !PCL
+    [Serializable]
+#endif
     [Mutable] // Exception itself is mutable
     public sealed class AmbiguousTimeException : ArgumentOutOfRangeException
     {
+        private readonly ZonedDateTime earlierMapping;
+        private readonly ZonedDateTime laterMapping;
+
         /// <summary>
-        /// Get the local date and time which is ambiguous in the time zone.
+        /// The local date and time which is ambiguous in the time zone.
         /// </summary>
-        /// <value>The local date and time which is ambiguous in the time zone.</value>
-        internal LocalDateTime LocalDateTime => EarlierMapping.LocalDateTime;
+        internal LocalDateTime LocalDateTime { get { return earlierMapping.LocalDateTime; } }
 
         /// <summary>
         /// The time zone in which the local date and time is ambiguous.
         /// </summary>
-        /// <value>The time zone in which the local date and time is ambiguous.</value>
-        public DateTimeZone Zone => EarlierMapping.Zone;
+        public DateTimeZone Zone { get { return earlierMapping.Zone; } }
 
         /// <summary>
-        /// Gets the earlier of the two occurrences of the local date and time within the time zone.
+        /// The earlier of the two occurrences of the local date and time within the time zone.
         /// </summary>
-        /// <value>The earlier of the two occurrences of the local date and time within the time zone.</value>
-        public ZonedDateTime EarlierMapping { get; }
+        public ZonedDateTime EarlierMapping { get { return earlierMapping; } }
 
         /// <summary>
-        /// Gets the later of the two occurrences of the local date and time within the time zone.
+        /// The later of the two occurrences of the local date and time within the time zone.
         /// </summary>
-        /// <value>The later of the two occurrences of the local date and time within the time zone.</value>
-        public ZonedDateTime LaterMapping { get; }
+        public ZonedDateTime LaterMapping { get { return laterMapping; } }
 
         /// <summary>
         /// Constructs an instance from the given information.
@@ -83,13 +78,13 @@ namespace NodaTime
         /// <param name="earlierMapping">The earlier possible mapping</param>
         /// <param name="laterMapping">The later possible mapping</param>
         public AmbiguousTimeException(ZonedDateTime earlierMapping, ZonedDateTime laterMapping)
-            : base($"Local time {earlierMapping.LocalDateTime} is ambiguous in time zone {earlierMapping.Zone.Id}")
+            : base("Local time " + earlierMapping.LocalDateTime + " is ambiguous in time zone " + earlierMapping.Zone.Id)
         {
-            EarlierMapping = earlierMapping;
-            LaterMapping = laterMapping;
-            Preconditions.CheckArgument(earlierMapping.Zone == laterMapping.Zone, nameof(laterMapping),
+            this.earlierMapping = earlierMapping;
+            this.laterMapping = laterMapping;
+            Preconditions.CheckArgument(earlierMapping.Zone == laterMapping.Zone, "laterMapping",
                                         "Ambiguous possible values must use the same time zone");
-            Preconditions.CheckArgument(earlierMapping.LocalDateTime == laterMapping.LocalDateTime, nameof(laterMapping),
+            Preconditions.CheckArgument(earlierMapping.LocalDateTime == laterMapping.LocalDateTime, "laterMapping",
                                         "Ambiguous possible values must have the same local date/time");
         }
     }

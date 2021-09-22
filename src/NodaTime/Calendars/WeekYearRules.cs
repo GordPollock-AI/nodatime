@@ -2,7 +2,9 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
+using JetBrains.Annotations;
 using NodaTime.Extensions;
+using NodaTime.Utility;
 using System;
 using System.Globalization;
 using static System.Globalization.CalendarWeekRule;
@@ -33,7 +35,7 @@ namespace NodaTime.Calendars
         /// </para>
         /// </remarks>
         /// <value>A <see cref="IWeekYearRule"/> consistent with ISO-8601.</value>
-        public static IWeekYearRule Iso { get; } = new SimpleWeekYearRule(4, IsoDayOfWeek.Monday, false);
+        [NotNull] public static IWeekYearRule Iso { get; } = new SimpleWeekYearRule(4, IsoDayOfWeek.Monday, false);
 
         /// <summary>
         /// Creates a week year rule where the boundary between one week-year and the next
@@ -55,7 +57,7 @@ namespace NodaTime.Calendars
         /// </param>
         /// <returns>A <see cref="SimpleWeekYearRule"/> with the specified minimum number of days in the first
         /// week.</returns>
-        public static IWeekYearRule ForMinDaysInFirstWeek(int minDaysInFirstWeek)
+        [NotNull] public static IWeekYearRule ForMinDaysInFirstWeek(int minDaysInFirstWeek)
             => ForMinDaysInFirstWeek(minDaysInFirstWeek, IsoDayOfWeek.Monday);
 
         /// <summary>
@@ -79,7 +81,7 @@ namespace NodaTime.Calendars
         /// <param name="firstDayOfWeek">The first day of the week.</param>
         /// <returns>A <see cref="SimpleWeekYearRule"/> with the specified minimum number of days in the first
         /// week and first day of the week.</returns>
-        public static IWeekYearRule ForMinDaysInFirstWeek(int minDaysInFirstWeek, IsoDayOfWeek firstDayOfWeek)
+        [NotNull] public static IWeekYearRule ForMinDaysInFirstWeek(int minDaysInFirstWeek, IsoDayOfWeek firstDayOfWeek)
             => new SimpleWeekYearRule(minDaysInFirstWeek, firstDayOfWeek, false);
 
         /// <summary>
@@ -99,16 +101,24 @@ namespace NodaTime.Calendars
         /// <returns>A rule which behaves the same way as the BCL
         /// <see cref="Calendar.GetWeekOfYear(DateTime, CalendarWeekRule, DayOfWeek)"/>
         /// method.</returns>
-        public static IWeekYearRule FromCalendarWeekRule(CalendarWeekRule calendarWeekRule, DayOfWeek firstDayOfWeek)
+        [NotNull] public static IWeekYearRule FromCalendarWeekRule(CalendarWeekRule calendarWeekRule, DayOfWeek firstDayOfWeek)
         {
-            int minDaysInFirstWeek = calendarWeekRule switch
+            int minDaysInFirstWeek;
+            switch (calendarWeekRule)
             {
-                FirstDay => 1,
-                FirstFourDayWeek => 4,
-                FirstFullWeek => 7,
-                _ => throw new ArgumentException($"Unsupported CalendarWeekRule: {calendarWeekRule}", nameof(calendarWeekRule))
-            };
-            return new SimpleWeekYearRule(minDaysInFirstWeek, firstDayOfWeek.ToIsoDayOfWeek(), true);
+                case FirstDay:
+                    minDaysInFirstWeek = 1;
+                    break;
+                case FirstFourDayWeek:
+                    minDaysInFirstWeek = 4;
+                    break;
+                case FirstFullWeek:
+                    minDaysInFirstWeek = 7;
+                    break;
+                default:
+                    throw new ArgumentException($"Unsupported CalendarWeekRule: {calendarWeekRule}", nameof(calendarWeekRule));
+            }
+            return new SimpleWeekYearRule(minDaysInFirstWeek, BclConversions.ToIsoDayOfWeek(firstDayOfWeek), true);
         }
     }
 }

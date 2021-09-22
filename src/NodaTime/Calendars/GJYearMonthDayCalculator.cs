@@ -2,84 +2,138 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using NodaTime.Annotations;
+using NodaTime.Utility;
 
 namespace NodaTime.Calendars
 {
     internal abstract class GJYearMonthDayCalculator : RegularYearMonthDayCalculator
     {
         // These arrays are NOT public. We trust ourselves not to alter the array.
-        // They are protected so that GregorianYearMonthDayCalculator can read them.
-        // The arrays are 1-based (so "days in January" are accessed via array[1]); the index should be validated before
-        // use.
-        private protected static readonly int[] NonLeapDaysPerMonth = { 0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
-        private protected static readonly int[] LeapDaysPerMonth = { 0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+        // They use zero-based array indexes so the that valid range of months is
+        // automatically checked.
+        private static readonly int[] MinDaysPerMonth = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+        private static readonly int[] MaxDaysPerMonth = { 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 
-        // Note: these fields must be declared after NonLeapDaysPerMonth and LeapDaysPerMonth so that the initialization
-        // is correct. This behavior (textual order for initialization) is guaranteed by the spec. We'd normally
-        // try to avoid relying on it, but that's quite hard here.
-        private static readonly int[] NonLeapTotalDaysByMonth = GenerateTotalDaysByMonth(NonLeapDaysPerMonth);
-        private static readonly int[] LeapTotalDaysByMonth = GenerateTotalDaysByMonth(LeapDaysPerMonth);
+        private static readonly long[] MinTotalTicksByMonth;
+        private static readonly long[] MaxTotalTicksByMonth;
 
-        /// <summary>
-        /// Produces an array with "the sum of the elements of <paramref name="monthLengths"/> before the corresponding index".
-        /// So for an input of [0, 1, 2, 3, 4, 5] this would produce [0, 0, 1, 3, 6, 10].
-        /// </summary>
-        private static int[] GenerateTotalDaysByMonth(int[] monthLengths)
+        static GJYearMonthDayCalculator()
         {
-            int[] ret = new int[monthLengths.Length];
-            for (int i = 0; i < ret.Length - 1; i++)
+            MinTotalTicksByMonth = new long[12];
+            MaxTotalTicksByMonth = new long[12];
+            long minSum = 0;
+            long maxSum = 0;
+            for (int i = 0; i < 11; i++)
             {
-                ret[i + 1] = ret[i] + monthLengths[i];
+                minSum += MinDaysPerMonth[i] * NodaConstants.TicksPerStandardDay;
+                maxSum += MaxDaysPerMonth[i] * NodaConstants.TicksPerStandardDay;
+                MinTotalTicksByMonth[i + 1] = minSum;
+                MaxTotalTicksByMonth[i + 1] = maxSum;
             }
-            return ret;
         }
 
-        protected GJYearMonthDayCalculator(int minYear, int maxYear, int averageDaysPer10Years, int daysAtStartOfYear1)
-            : base(minYear, maxYear, 12, averageDaysPer10Years, daysAtStartOfYear1)
+        protected GJYearMonthDayCalculator(int minYear, int maxYear, long averageTicksPerYear, long ticksAtStartOfYear1)
+            : base(minYear, maxYear, 12, averageTicksPerYear, ticksAtStartOfYear1, Era.BeforeCommon, Era.Common)
         {
         }
 
-        // Note: parameter is renamed to d for brevity. It's still the 1-based day-of-year
-        internal override YearMonthDay GetYearMonthDay([Trusted] int year, int d)
+        protected override int GetMonthOfYear(LocalInstant localInstant, int year)
         {
-            bool isLeap = IsLeapYear(year);
+            // Perform a binary search to get the month. To make it go even faster,
+            // compare using ints instead of longs. The number of ticks per
+            // year exceeds the limit of a 32-bit int's capacity, so divide by
+            // 1024 * 10000. No precision is lost (except time of day) since the number of
+            // ticks per day contains 1024 * 10000 as a factor. After the division,
+            // the instant isn't measured in ticks, but in units of
+            // (128/125) seconds.
+            int i = (int)((((localInstant.Ticks - GetStartOfYearInTicks(year))) >> 10) / NodaConstants.TicksPerMillisecond);
 
-            int startOfMonth;
-            // Perform a hard-coded binary search to get the 0-based start day of the month. We can
-            // then use that to work out the month... without ever hitting the heap. The values
-            // are still MinTotalDaysPerMonth and MaxTotalDaysPerMonth (-1 for convenience), just hard-coded.
-            if (isLeap)
-            {
-                startOfMonth = ((d < 183)
-                              ? ((d < 92) ? ((d < 32) ? 0 : (d < 61) ? 31 : 60) : ((d < 122) ? 91 : (d < 153) ? 121 : 152))
-                              : ((d < 275)
-                                     ? ((d < 214) ? 182 : (d < 245) ? 213 : 244)
-                                     : ((d < 306) ? 274 : (d < 336) ? 305 : 335)));
-            }
-            else
-            {
-                startOfMonth = ((d < 182)
-                              ? ((d < 91) ? ((d < 32) ? 0 : (d < 60) ? 31 : 59) : ((d < 121) ? 90 : (d < 152) ? 120 : 151))
-                              : ((d < 274)
-                                     ? ((d < 213) ? 181 : (d < 244) ? 212 : 243)
-                                     : ((d < 305) ? 273 : (d < 335) ? 304 : 334)));
-            }
-
-            int dayOfMonth = d - startOfMonth;
-            return new YearMonthDay(year, (startOfMonth / 29) + 1, dayOfMonth);
+            return (IsLeapYear(year))
+                       ? ((i < 182 * 84375)
+                              ? ((i < 91 * 84375) ? ((i < 31 * 84375) ? 1 : (i < 60 * 84375) ? 2 : 3) : ((i < 121 * 84375) ? 4 : (i < 152 * 84375) ? 5 : 6))
+                              : ((i < 274 * 84375)
+                                     ? ((i < 213 * 84375) ? 7 : (i < 244 * 84375) ? 8 : 9)
+                                     : ((i < 305 * 84375) ? 10 : (i < 335 * 84375) ? 11 : 12)))
+                       : ((i < 181 * 84375)
+                              ? ((i < 90 * 84375) ? ((i < 31 * 84375) ? 1 : (i < 59 * 84375) ? 2 : 3) : ((i < 120 * 84375) ? 4 : (i < 151 * 84375) ? 5 : 6))
+                              : ((i < 273 * 84375)
+                                     ? ((i < 212 * 84375) ? 7 : (i < 243 * 84375) ? 8 : 9)
+                                     : ((i < 304 * 84375) ? 10 : (i < 334 * 84375) ? 11 : 12)));
         }
 
-        internal override int GetDaysInYear([Trusted] int year) => IsLeapYear(year) ? 366 : 365;
+        internal override int GetDaysInMonth(int year, int month)
+        {
+            return IsLeapYear(year) ? MaxDaysPerMonth[month - 1] : MinDaysPerMonth[month - 1];
+        }
 
-        internal sealed override int GetDaysInMonth([Trusted] int year, [Trusted] int month) =>
-            // February is awkward
-            month == 2 ? IsLeapYear(year) ? 29 : 28
-            // The lengths of months alternate between 30 and 31, but skip a beat for August.
-            // By dividing the month by 8, we effectively handle that skip.
-            : 30 + ((month + (month >> 3)) & 1);
+        protected override long GetTicksFromStartOfYearToStartOfMonth(int year, int month)
+        {
+            return IsLeapYear(year) ? MaxTotalTicksByMonth[month - 1] : MinTotalTicksByMonth[month - 1];
+        }
 
-        protected override int GetDaysFromStartOfYearToStartOfMonth([Trusted] int year, [Trusted] int month) =>
-            IsLeapYear(year) ? LeapTotalDaysByMonth[month] : NonLeapTotalDaysByMonth[month];
+        internal override LocalInstant GetLocalInstant(Era era, int yearOfEra, int monthOfYear, int dayOfMonth)
+        {
+            int eraIndex = GetEraIndex(era);
+            Preconditions.CheckArgumentRange("yearOfEra", yearOfEra, 1, GetMaxYearOfEra(eraIndex));
+            return GetLocalInstant(GetAbsoluteYear(yearOfEra, eraIndex), monthOfYear, dayOfMonth);
+        }
+
+        internal override LocalInstant SetYear(LocalInstant localInstant, int year)
+        {
+            int thisYear = GetYear(localInstant);
+            int dayOfYear = GetDayOfYear(localInstant, thisYear);
+            long tickOfDay = TimeOfDayCalculator.GetTickOfDay(localInstant);
+
+            if (dayOfYear > (31 + 28))
+            {
+                // after Feb 28
+                if (IsLeapYear(thisYear))
+                {
+                    // Current date is Feb 29 or later.
+                    if (!IsLeapYear(year))
+                    {
+                        // Moving to a non-leap year, Feb 29 does not exist.
+                        dayOfYear--;
+                    }
+                }
+                else
+                {
+                    // Current date is Mar 01 or later.
+                    if (IsLeapYear(year))
+                    {
+                        // Moving to a leap year, account for Feb 29.
+                        dayOfYear++;
+                    }
+                }
+            }
+
+            long ticks = GetYearMonthDayTicks(year, 1, dayOfYear);
+            return new LocalInstant(ticks + tickOfDay);
+        }
+
+        #region Era handling
+        internal override int GetAbsoluteYear(int yearOfEra, int eraIndex)
+        {
+            // By now the era will have been validated; it's either 0 (BC) or 1 (AD)
+            return eraIndex == 0 ? 1 - yearOfEra: yearOfEra;
+        }
+
+        internal override int GetMaxYearOfEra(int eraIndex)
+        {
+            // By now the era will have been validated; it's either 0 (BC) or 1 (AD)
+            return eraIndex == 0 ? 1 - MinYear : MaxYear;
+        }
+
+        internal override int GetYearOfEra(LocalInstant localInstant)
+        {
+            int year = GetYear(localInstant);
+            return year <= 0 ? -year + 1 : year;
+        }
+
+        internal override int GetEra(LocalInstant localInstant)
+        {
+            return localInstant.Ticks < TicksAtStartOfYear1 ? 0 : 1;
+        }
+        #endregion
     }
 }

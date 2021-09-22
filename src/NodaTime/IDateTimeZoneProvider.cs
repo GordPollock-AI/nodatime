@@ -2,10 +2,11 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using NodaTime.TimeZones;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using JetBrains.Annotations;
+using NodaTime.TimeZones;
 
 namespace NodaTime
 {
@@ -14,8 +15,8 @@ namespace NodaTime
     /// </summary>
     /// <remarks>
     /// <para>Consumers should be able to treat an <see cref="IDateTimeZoneProvider"/> like a cache: 
-    /// lookups should be quick (after at most one lookup of a given ID), and multiple calls for a given ID must
-    /// always return references to equal instances, even if they are not references to a single instance.
+    /// lookups should be quick (after at most one lookup of a given ID), and the data for a given ID should always be
+    /// the same (even if the specific instance returned is not).
     /// Consumers should not feel the need to cache data accessed through this interface.</para>
     /// <para>Implementations designed to work with any <see cref="IDateTimeZoneSource"/> implementation (such as
     /// <see cref="DateTimeZoneCache"/>) should not attempt to handle exceptions thrown by the source. A source-specific
@@ -24,9 +25,8 @@ namespace NodaTime
     public interface IDateTimeZoneProvider
     {
         /// <summary>
-        /// Gets the version ID of this provider.
+        /// The version ID of this provider.
         /// </summary>
-        /// <value>The version ID of this provider.</value>
         string VersionId { get; }
 
         /// <summary>
@@ -46,6 +46,27 @@ namespace NodaTime
         /// <value>The <see cref="IEnumerable{T}" /> of string ids.</value>
         ReadOnlyCollection<string> Ids { get; }
 
+#if PCL
+        /// <summary>
+        /// Gets the time zone from this provider that matches the system default time zone, if a matching time zone is
+        /// available.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Callers should be aware that this method will throw <see cref="DateTimeZoneNotFoundException"/> if no matching
+        /// time zone is found. For the built-in Noda Time providers, this is unlikely to occur in practice (assuming
+        /// the system is using a standard Windows time zone), but can occur even then, if no mapping is found. The TZDB
+        /// source contains mappings for almost all Windows system time zones, but a few (such as "Mid-Atlantic Standard Time")
+        /// are unmappable.
+        /// </para>
+        /// </remarks>
+        /// <exception cref="DateTimeZoneNotFoundException">The system default time zone is not mapped by
+        /// this provider.</exception>
+        /// <returns>
+        /// The provider-specific representation of the system default time zone.
+        /// </returns>
+        DateTimeZone GetSystemDefault();
+#else
         /// <summary>
         /// Gets the time zone from this provider that matches the system default time zone, if a matching time zone is
         /// available.
@@ -62,9 +83,8 @@ namespace NodaTime
         /// If it is necessary to handle this case, callers can construct a
         /// <see cref="BclDateTimeZone"/> via <see cref="BclDateTimeZone.ForSystemDefault"/>, which returns a
         /// <see cref="DateTimeZone"/> that wraps the system local <see cref="TimeZoneInfo"/>, and which always
-        /// succeeds.
-        /// Note that <c>BclDateTimeZone</c> may not be available in all versions of Noda Time 1.x and 2.x; see
-        /// the class documentation for more details.
+        /// succeeds. Note that <c>BclDateTimeZone</c> is not available on the PCL build of Noda Time, so
+        /// this fallback strategy can only be used with the desktop version.
         /// </para>
         /// </remarks>
         /// <exception cref="DateTimeZoneNotFoundException">The system default time zone is not mapped by
@@ -73,6 +93,7 @@ namespace NodaTime
         /// The provider-specific representation of the system default time zone.
         /// </returns>
         DateTimeZone GetSystemDefault();
+#endif
 
         /// <summary>
         /// Returns the time zone for the given ID, if it's available.
@@ -88,13 +109,14 @@ namespace NodaTime
         /// as equal.
         /// </para>
         /// <para>
-        /// The fixed-offset timezones with IDs "UTC" and "UTC+/-Offset" are always available.
+        /// The fixed-offset timezones with IDs "UTC" and "UTC+/-Offset" are always available. These must
+        /// return instances that are equal to those returned by <see cref="DateTimeZone.ForOffset"/>.
         /// </para>
         /// </remarks>
         /// <param name="id">The time zone ID to find.</param>
         /// <returns>The <see cref="DateTimeZone" /> for the given ID or null if the provider does not support
         /// the given ID.</returns>
-        DateTimeZone? GetZoneOrNull(string id);
+        DateTimeZone GetZoneOrNull([NotNull] string id);
 
         /// <summary>
         /// Returns the time zone for the given ID.
@@ -114,12 +136,13 @@ namespace NodaTime
         /// as equal.
         /// </para>
         /// <para>
-        /// The fixed-offset timezones with IDs "UTC" and "UTC+/-Offset" are always available.
+        /// The fixed-offset timezones with IDs "UTC" and "UTC+/-Offset" are always available. These must
+        /// return instances that are equal to those returned by <see cref="DateTimeZone.ForOffset"/>.
         /// </para>
         /// </remarks>
         /// <param name="id">The time zone id to find.</param>
-        /// <value>The <see cref="DateTimeZone" /> for the given ID.</value>
+        /// <returns>The <see cref="DateTimeZone" /> for the given ID.</returns>
         /// <exception cref="DateTimeZoneNotFoundException">This provider does not support the given ID.</exception>
-        DateTimeZone this[string id] { get; }
+        DateTimeZone this[[NotNull] string id] { get; }
     }
 }

@@ -2,9 +2,9 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
+using System;
 using NodaTime.TimeZones;
 using NodaTime.Utility;
-using System;
 
 namespace NodaTime
 {
@@ -19,17 +19,26 @@ namespace NodaTime
         /// The underlying source is <see cref="TzdbDateTimeZoneSource.Default"/>, which is initialized from
         /// resources within the NodaTime assembly.
         /// </summary>
-        /// <value>A time zone provider using a <c>TzdbDateTimeZoneSource</c>.</value>
-        public static IDateTimeZoneProvider Tzdb => TzdbHolder.TzdbImpl;
+        public static IDateTimeZoneProvider Tzdb { get { return TzdbHolder.TzdbImpl; } }
 
         // This class exists to force TZDB initialization to be lazy. We don't want using
         // DateTimeZoneProviders.Bcl to force a read/parse of TZDB data.
         private static class TzdbHolder
         {
-            // See https://csharpindepth.com/Articles/BeforeFieldInit
+            // See http://csharpindepth.com/Articles/General/BeforeFieldInit.aspx
             static TzdbHolder() {}
             internal static readonly DateTimeZoneCache TzdbImpl = new DateTimeZoneCache(TzdbDateTimeZoneSource.Default);
         }
+
+#if !PCL
+        /// <summary>
+        /// Gets the TZDB time zone provider.
+        /// This always returns the same value as the <see cref="Tzdb"/> property.
+        /// </summary>
+        /// <remarks>This method is not available in the PCL version, as it was made obsolete in Noda Time 1.1.</remarks>
+        /// <seealso cref="Tzdb"/>
+        [Obsolete("Use DateTimeZoneProviders.Tzdb instead")]
+        public static IDateTimeZoneProvider Default { get { return Tzdb; } }
 
         // As per TzDbHolder above, this exists to defer construction of a BCL provider until needed.
         // While BclDateTimeZoneSource itself is lightweight, DateTimeZoneCache still does a non-trivial amount of work
@@ -42,30 +51,40 @@ namespace NodaTime
 
         /// <summary>
         /// Gets a time zone provider which uses a <see cref="BclDateTimeZoneSource"/>.
+        /// This property is not available on the PCL build of Noda Time.
         /// </summary>
-        /// <remarks>
-        /// <para>
-        /// See note on <see cref="BclDateTimeZone"/> for details of some incompatibilities with the BCL.
-        /// </para>
-        /// <para>
-        /// In Noda Time 1.x and 2.x, this property is only available on the .NET Framework builds of Noda Time, and not
-        /// the PCL (Noda Time 1.x) or .NET Standard 1.3 (Noda Time 2.x) builds.
-        /// </para>
-        /// </remarks>
-        /// <value>A time zone provider which uses a <c>BclDateTimeZoneSource</c>.</value>
-        public static IDateTimeZoneProvider Bcl => BclHolder.BclImpl;
+        public static IDateTimeZoneProvider Bcl { get { return BclHolder.BclImpl; } }
+#endif
+
+        private static readonly object SerializationProviderLock = new object();
+        private static IDateTimeZoneProvider serializationProvider;
 
         /// <summary>
-        /// Gets the <see cref="IDateTimeZoneProvider"/> to use to interpret a time zone ID read as part of
-        /// XML serialization. This property is obsolete as of version 3.0; the functionality still exists
-        /// in <see cref="Xml.XmlSerializationSettings.DateTimeZoneProvider"/>, which this property delegates
-        /// to. (The behavior has not changed; this is purely an exercise in moving/renaming.)
+        /// The <see cref="IDateTimeZoneProvider"/> to use to interpret a time zone ID read as part of
+        /// XML or binary serialization.
         /// </summary>
-        [Obsolete("This property exists primarily for binary backward compatibility. Please use NodaTime.Xml.XmlSerializationSettings.DateTimeZoneProvider instead.")]
+        /// <remarks>
+        /// This property defaults to <see cref="DateTimeZoneProviders.Tzdb"/>. The mere existence of
+        /// this property is unfortunate, but XML and binary serialization in .NET provide no simple way of configuring
+        /// appropriate context. It is expected that any single application is unlikely to want to serialize
+        /// <c>ZonedDateTime</c> values using different time zone providers.
+        /// </remarks>
         public static IDateTimeZoneProvider Serialization
         {
-            get => Xml.XmlSerializationSettings.DateTimeZoneProvider;
-            set => Xml.XmlSerializationSettings.DateTimeZoneProvider = value;
+            get
+            {
+                lock (SerializationProviderLock)
+                {
+                    return serializationProvider ?? (serializationProvider = Tzdb);
+                }
+            }
+            set
+            {
+                lock (SerializationProviderLock)
+                {
+                    serializationProvider = Preconditions.CheckNotNull(value, "value");
+                }
+            }
         }
     }
 }

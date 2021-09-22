@@ -2,9 +2,6 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using NodaTime.Annotations;
-using System.Text;
-
 namespace NodaTime.Text
 {
     /// <summary>
@@ -28,7 +25,7 @@ namespace NodaTime.Text
         /// </remarks>
         /// <param name="text">The text value to parse.</param>
         /// <returns>The result of parsing, which may be successful or unsuccessful.</returns>
-        ParseResult<T> Parse([SpecialNullHandling] string text);
+        ParseResult<T> Parse(string text);
 
         /// <summary>
         /// Formats the given value as text according to the rules of this pattern.
@@ -36,14 +33,5 @@ namespace NodaTime.Text
         /// <param name="value">The value to format.</param>
         /// <returns>The value formatted according to this pattern.</returns>
         string Format(T value);
-
-        /// <summary>
-        /// Formats the given value as text according to the rules of this pattern,
-        /// appending to the given <see cref="StringBuilder"/>.
-        /// </summary>
-        /// <param name="value">The value to format.</param>
-        /// <param name="builder">The <c>StringBuilder</c> to append to.</param>
-        /// <returns>The builder passed in as <paramref name="builder"/>.</returns>
-        StringBuilder AppendFormat(T value, StringBuilder builder);
     }
 }

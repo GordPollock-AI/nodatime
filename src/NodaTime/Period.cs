@@ -2,15 +2,14 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
+using System;
+using System.Collections.Generic;
+using System.Runtime.Serialization;
 using JetBrains.Annotations;
 using NodaTime.Annotations;
 using NodaTime.Fields;
 using NodaTime.Text;
 using NodaTime.Utility;
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using static NodaTime.NodaConstants;
 
 namespace NodaTime
 {
@@ -32,13 +31,7 @@ namespace NodaTime
     /// both cases).
     /// </para>
     /// <para>
-    /// <see cref="Period"/> equality is implemented by comparing each property's values individually, without any normalization.
-    /// (For example, a period of "24 hours" is not considered equal to a period of "1 day".) The static
-    /// <see cref="NormalizingEqualityComparer"/> comparer provides an equality comparer which performs normalization before comparisons.
-    /// </para>
-    /// <para>
-    /// There is no natural ordering for periods, but <see cref="CreateComparer(LocalDateTime)"/> can be used to create a
-    /// comparer which orders periods according to a reference date, by adding each period to that date and comparing the results.
+    /// <see cref="Period"/> equality is implemented by comparing each property's values individually.
     /// </para>
     /// <para>
     /// Periods operate on calendar-related types such as
@@ -46,179 +39,111 @@ namespace NodaTime
     /// on the time line. (Note that although <see cref="ZonedDateTime" /> includes both concepts, it only supports
     /// duration-based arithmetic.)
     /// </para>
-    /// <para>
-    /// The complexity of each method in this type is hard to document precisely, and often depends on the calendar system
-    /// involved in performing the actual calculations. Operations do not depend on the magnitude of the units in the period,
-    /// other than for optimizations for values of zero or occasionally for particularly small values. For example,
-    /// adding 10,000 days to a date does not require greater algorithmic complexity than adding 1,000 days to the same date.
-    /// </para>
     /// </remarks>
     /// <threadsafety>This type is immutable reference type. See the thread safety section of the user guide for more information.</threadsafety>
+#if !PCL
+    [Serializable]
+#endif
     [Immutable]
-    [TypeConverter(typeof(PeriodTypeConverter))]
-    public sealed class Period : IEquatable<Period?>
+    public sealed class Period : IEquatable<Period>
+#if !PCL
+        , ISerializable
+#endif
     {
-        // General implementation note: operations such as normalization work out the total number of nanoseconds as an Int64
-        // value. This can handle +/- 106,751 days, or 292 years. We could move to using BigInteger if we feel that's required,
-        // but it's unlikely to be an issue. Ideally, we'd switch to use BigInteger after detecting that it could be a problem,
-        // but without the hit of having to catch the exception...
+        /// <summary>
+        /// In some cases, periods are represented as <c>long[]</c> arrays containing all possible units (years to
+        /// ticks). This is the size of those arrays.
+        /// </summary>
+        private const int ValuesArraySize = 9;
+
+        // The indexes into those arrays, for readability.
+        // Note that these must match up with the single values in PeriodUnits, such
+        // that 1<<index is the same as the equivalent value in PeriodUnits.
+        private const int YearIndex = 0;
+        private const int MonthIndex = 1;
+        private const int WeekIndex = 2;
+        private const int DayIndex = 3;
+        private const int HourIndex = 4;
+        private const int MinuteIndex = 5;
+        private const int SecondIndex = 6;
+        private const int MillisecondIndex = 7;
+        private const int TickIndex = 8;
 
         /// <summary>
         /// A period containing only zero-valued properties.
         /// </summary>
-        /// <value>A period containing only zero-valued properties.</value>
-        public static Period Zero { get; } = new Period(0, 0, 0, 0);
+        public static readonly Period Zero = new Period(new long[ValuesArraySize]);
 
         /// <summary>
         /// Returns an equality comparer which compares periods by first normalizing them - so 24 hours is deemed equal to 1 day, and so on.
         /// Note that as per the <see cref="Normalize"/> method, years and months are unchanged by normalization - so 12 months does not
         /// equal 1 year.
         /// </summary>
-        /// <value>An equality comparer which compares periods by first normalizing them.</value>
-        public static IEqualityComparer<Period?> NormalizingEqualityComparer => NormalizingPeriodEqualityComparer.Instance;
+        public static IEqualityComparer<Period> NormalizingEqualityComparer { get { return NormalizingPeriodEqualityComparer.Instance; } }
 
         // The fields that make up this period.
+        private readonly long ticks;
+        private readonly long milliseconds;
+        private readonly long seconds;
+        private readonly long minutes;
+        private readonly long hours;
+        private readonly long days;
+        private readonly long weeks;
+        private readonly long months;
+        private readonly long years;
 
         /// <summary>
-        /// Gets the number of nanoseconds within this period.
+        /// Creates a new period from the given array.
         /// </summary>
-        /// <remarks>
-        /// This property returns zero both when the property has been explicitly set to zero and when the period does not
-        /// contain this property.
-        /// </remarks>
-        /// <value>The number of nanoseconds within this period.</value>
-        public long Nanoseconds { get; }
-
-        /// <summary>
-        /// Gets the number of ticks within this period.
-        /// </summary>
-        /// <remarks>
-        /// This property returns zero both when the property has been explicitly set to zero and when the period does not
-        /// contain this property.
-        /// </remarks>
-        /// <value>The number of ticks within this period.</value>
-        public long Ticks { get; }
-
-        /// <summary>
-        /// Gets the number of milliseconds within this period.
-        /// </summary>
-        /// <remarks>
-        /// This property returns zero both when the property has been explicitly set to zero and when the period does not
-        /// contain this property.
-        /// </remarks>
-        /// <value>The number of milliseconds within this period.</value>
-        public long Milliseconds { get; }
-
-        /// <summary>
-        /// Gets the number of seconds within this period.
-        /// </summary>
-        /// <remarks>
-        /// This property returns zero both when the property has been explicitly set to zero and when the period does not
-        /// contain this property.
-        /// </remarks>
-        /// <value>The number of seconds within this period.</value>
-        public long Seconds { get; }
-
-        /// <summary>
-        /// Gets the number of minutes within this period.
-        /// </summary>
-        /// <remarks>
-        /// This property returns zero both when the property has been explicitly set to zero and when the period does not
-        /// contain this property.
-        /// </remarks>
-        /// <value>The number of minutes within this period.</value>
-        public long Minutes { get; }
-
-        /// <summary>
-        /// Gets the number of hours within this period.
-        /// </summary>
-        /// <remarks>
-        /// This property returns zero both when the property has been explicitly set to zero and when the period does not
-        /// contain this property.
-        /// </remarks>
-        /// <value>The number of hours within this period.</value>
-        public long Hours { get; }
-
-        /// <summary>
-        /// Gets the number of days within this period.
-        /// </summary>
-        /// <remarks>
-        /// This property returns zero both when the property has been explicitly set to zero and when the period does not
-        /// contain this property.
-        /// </remarks>
-        /// <value>The number of days within this period.</value>
-        public int Days { get; }
-
-        /// <summary>
-        /// Gets the number of weeks within this period.
-        /// </summary>
-        /// <remarks>
-        /// This property returns zero both when the property has been explicitly set to zero and when the period does not
-        /// contain this property.
-        /// </remarks>
-        /// <value>The number of weeks within this period.</value>
-        public int Weeks { get; }
-
-        /// <summary>
-        /// Gets the number of months within this period.
-        /// </summary>
-        /// <remarks>
-        /// This property returns zero both when the property has been explicitly set to zero and when the period does not
-        /// contain this property.
-        /// </remarks>
-        /// <value>The number of months within this period.</value>
-        public int Months { get; }
-
-        /// <summary>
-        /// Gets the number of years within this period.
-        /// </summary>
-        /// <remarks>
-        /// This property returns zero both when the property has been explicitly set to zero and when the period does not
-        /// contain this property.
-        /// </remarks>
-        /// <value>The number of years within this period.</value>
-        public int Years { get; }
-
-        /// <summary>
-        /// Creates a period with the given date values.
-        /// </summary>
-        private Period(int years, int months, int weeks, int days)
+        /// <param name="values">Values for each field</param>
+        private Period(long[] values)
         {
-            this.Years = years;
-            this.Months = months;
-            this.Weeks = weeks;
-            this.Days = days;
-        }
-
-        /// <summary>
-        /// Creates a period with the given time values.
-        /// </summary>
-        private Period(long hours, long minutes, long seconds, long milliseconds, long ticks, long nanoseconds)
-        {
-            this.Hours = hours;
-            this.Minutes = minutes;
-            this.Seconds = seconds;
-            this.Milliseconds = milliseconds;
-            this.Ticks = ticks;
-            this.Nanoseconds = nanoseconds;
+            years = values[YearIndex];
+            months = values[MonthIndex];
+            weeks = values[WeekIndex];
+            days = values[DayIndex];
+            hours = values[HourIndex];
+            minutes = values[MinuteIndex];
+            seconds = values[SecondIndex];
+            milliseconds = values[MillisecondIndex];
+            ticks = values[TickIndex];
         }
 
         /// <summary>
         /// Creates a new period from the given values.
         /// </summary>
-        internal Period(int years, int months, int weeks, int days, long hours, long minutes, long seconds,
-            long milliseconds, long ticks, long nanoseconds)
+        internal Period(long years, long months, long weeks, long days, long hours, long minutes, long seconds,
+            long milliseconds, long ticks)
         {
-            this.Years = years;
-            this.Months = months;
-            this.Weeks = weeks;
-            this.Days = days;
-            this.Hours = hours;
-            this.Minutes = minutes;
-            this.Seconds = seconds;
-            this.Milliseconds = milliseconds;
-            this.Ticks = ticks;
-            this.Nanoseconds = nanoseconds;
+            this.years = years;
+            this.months = months;
+            this.weeks = weeks;
+            this.days = days;
+            this.hours = hours;
+            this.minutes = minutes;
+            this.seconds = seconds;
+            this.milliseconds = milliseconds;
+            this.ticks = ticks;
+        }
+
+        /// <summary>
+        /// Creates a new period with the given single value.
+        /// </summary>
+        private Period(PeriodUnits periodUnit, long value)
+        {
+            switch (periodUnit)
+            {
+                case PeriodUnits.Years: years = value; break;
+                case PeriodUnits.Months: months = value; break;
+                case PeriodUnits.Weeks: weeks = value; break;
+                case PeriodUnits.Days: days = value; break;
+                case PeriodUnits.Hours: hours = value; break;
+                case PeriodUnits.Minutes: minutes = value; break;
+                case PeriodUnits.Seconds: seconds = value; break;
+                case PeriodUnits.Milliseconds: milliseconds = value; break;
+                case PeriodUnits.Ticks: ticks = value; break;
+                default: throw new ArgumentException("Unit must be singular", "periodUnit");
+            }
         }
 
         /// <summary>
@@ -226,70 +151,138 @@ namespace NodaTime
         /// </summary>
         /// <param name="years">The number of years in the new period</param>
         /// <returns>A period consisting of the given number of years.</returns>
-        public static Period FromYears(int years) => new Period(years, 0, 0, 0);
+        [NotNull]
+        public static Period FromYears(int years) => FromYears((long) years);
 
         /// <summary>
-        /// Creates a period representing the specified number of months.
+        /// Creates a period representing the specified number of years.
         /// </summary>
-        /// <param name="months">The number of months in the new period</param>
-        /// <returns>A period consisting of the given number of months.</returns>
-        public static Period FromMonths(int months) => new Period(0, months, 0, 0);
+        /// <param name="years">The number of years in the new period</param>
+        /// <returns>A period consisting of the given number of years.</returns>
+        [NotNull]
+        [Obsolete("Use FromYears(Int32) for compatibility with 2.0")]
+        public static Period FromYears(long years)
+        {
+            return new Period(PeriodUnits.Years, years);
+        }
 
         /// <summary>
         /// Creates a period representing the specified number of weeks.
         /// </summary>
         /// <param name="weeks">The number of weeks in the new period</param>
         /// <returns>A period consisting of the given number of weeks.</returns>
-        public static Period FromWeeks(int weeks) => new Period(0, 0, weeks, 0);
+        public static Period FromWeeks(int weeks) => FromWeeks((long) weeks);
+
+        /// <summary>
+        /// Creates a period representing the specified number of weeks.
+        /// </summary>
+        /// <param name="weeks">The number of weeks in the new period</param>
+        /// <returns>A period consisting of the given number of weeks.</returns>
+        [Obsolete("Use FromWeeks(Int32) for compatibility with 2.0")]
+        public static Period FromWeeks(long weeks)
+        {
+            return new Period(PeriodUnits.Weeks, weeks);
+        }
+
+        /// <summary>
+        /// Creates a period representing the specified number of months.
+        /// </summary>
+        /// <param name="months">The number of months in the new period</param>
+        /// <returns>A period consisting of the given number of months.</returns>
+        public static Period FromMonths(int months) => FromMonths((long) months);
+
+        /// <summary>
+        /// Creates a period representing the specified number of months.
+        /// </summary>
+        /// <param name="months">The number of months in the new period</param>
+        /// <returns>A period consisting of the given number of months.</returns>
+        [Obsolete("Use FromMonths(Int32) for compatibility with 2.0")]
+        public static Period FromMonths(long months)
+        {
+            return new Period(PeriodUnits.Months, months);
+        }
 
         /// <summary>
         /// Creates a period representing the specified number of days.
         /// </summary>
         /// <param name="days">The number of days in the new period</param>
         /// <returns>A period consisting of the given number of days.</returns>
-        public static Period FromDays(int days) => new Period(0, 0, 0, days);
+        public static Period FromDays(int days) => FromDays((long) days);
+
+        /// <summary>
+        /// Creates a period representing the specified number of days.
+        /// </summary>
+        /// <param name="days">The number of days in the new period</param>
+        /// <returns>A period consisting of the given number of days.</returns>
+        [Obsolete("Use FromDays(Int32) for compatibility with 2.0")]
+        public static Period FromDays(long days)
+        {
+            return new Period(PeriodUnits.Days, days);
+        }
 
         /// <summary>
         /// Creates a period representing the specified number of hours.
         /// </summary>
         /// <param name="hours">The number of hours in the new period</param>
         /// <returns>A period consisting of the given number of hours.</returns>
-        public static Period FromHours(long hours) => new Period(hours, 0L, 0L, 0L, 0L, 0L);
+        public static Period FromHours(long hours)
+        {
+            return new Period(PeriodUnits.Hours, hours);
+        }
 
         /// <summary>
         /// Creates a period representing the specified number of minutes.
         /// </summary>
         /// <param name="minutes">The number of minutes in the new period</param>
         /// <returns>A period consisting of the given number of minutes.</returns>
-        public static Period FromMinutes(long minutes) => new Period(0L, minutes, 0L, 0L, 0L, 0L);
+        public static Period FromMinutes(long minutes)
+        {
+            return new Period(PeriodUnits.Minutes, minutes);
+        }
 
         /// <summary>
         /// Creates a period representing the specified number of seconds.
         /// </summary>
         /// <param name="seconds">The number of seconds in the new period</param>
         /// <returns>A period consisting of the given number of seconds.</returns>
-        public static Period FromSeconds(long seconds) => new Period(0L, 0L, seconds, 0L, 0L, 0L);
+        public static Period FromSeconds(long seconds)
+        {
+            return new Period(PeriodUnits.Seconds, seconds);
+        }
+
+#if !PCL
+        /// <summary>
+        /// Creates a period representing the specified number of milliseconds.
+        /// </summary>
+        /// <remarks>This method is not available in the PCL version, as it was made obsolete in Noda Time 1.1.</remarks>
+        /// <param name="milliseconds">The number of milliseconds in the new period</param>
+        /// <returns>A period consisting of the given number of milliseconds.</returns>
+        [Obsolete("Use FromMilliseconds instead. This method's name was a typo, and it will be removed in a future release.")]
+        public static Period FromMillseconds(long milliseconds)
+        {
+            return FromMilliseconds(milliseconds);
+        }
+#endif
 
         /// <summary>
         /// Creates a period representing the specified number of milliseconds.
         /// </summary>
         /// <param name="milliseconds">The number of milliseconds in the new period</param>
         /// <returns>A period consisting of the given number of milliseconds.</returns>
-        public static Period FromMilliseconds(long milliseconds) => new Period(0L, 0L, 0L, milliseconds, 0L, 0L);
+        public static Period FromMilliseconds(long milliseconds)
+        {
+            return new Period(PeriodUnits.Milliseconds, milliseconds);
+        }
 
         /// <summary>
         /// Creates a period representing the specified number of ticks.
         /// </summary>
         /// <param name="ticks">The number of ticks in the new period</param>
         /// <returns>A period consisting of the given number of ticks.</returns>
-        public static Period FromTicks(long ticks) => new Period(0L, 0L, 0L, 0L, ticks, 0L);
-
-        /// <summary>
-        /// Creates a period representing the specified number of nanoseconds.
-        /// </summary>
-        /// <param name="nanoseconds">The number of nanoseconds in the new period</param>
-        /// <returns>A period consisting of the given number of nanoseconds.</returns>
-        public static Period FromNanoseconds(long nanoseconds) => new Period(0L, 0L, 0L, 0L, 0L, nanoseconds);
+        public static Period FromTicks(long ticks)
+        {
+            return new Period(PeriodUnits.Ticks, ticks);
+        }
 
         /// <summary>
         /// Adds two periods together, by simply adding the values for each property.
@@ -300,29 +293,12 @@ namespace NodaTime
         /// periods.</returns>
         public static Period operator +(Period left, Period right)
         {
-            Preconditions.CheckNotNull(left, nameof(left));
-            Preconditions.CheckNotNull(right, nameof(right));
-            return new Period(
-                left.Years + right.Years,
-                left.Months + right.Months,
-                left.Weeks + right.Weeks,
-                left.Days + right.Days,
-                left.Hours + right.Hours,
-                left.Minutes + right.Minutes,
-                left.Seconds + right.Seconds,
-                left.Milliseconds + right.Milliseconds,
-                left.Ticks + right.Ticks,
-                left.Nanoseconds + right.Nanoseconds);
+            Preconditions.CheckNotNull(left, "left");
+            Preconditions.CheckNotNull(right, "right");
+            long[] sum = left.ToArray();
+            right.AddValuesTo(sum);
+            return new Period(sum);
         }
-
-        /// <summary>
-        /// Adds two periods together, by simply adding the values for each property.
-        /// </summary>
-        /// <param name="left">The first period to add</param>
-        /// <param name="right">The second period to add</param>
-        /// <returns>The sum of the two periods. The units of the result will be the union of those in both
-        /// periods.</returns>
-        public static Period Add(Period left, Period right) => left + right;
 
         /// <summary>
         /// Creates an <see cref="IComparer{T}"/> for periods, using the given "base" local date/time.
@@ -336,7 +312,62 @@ namespace NodaTime
         /// </remarks>
         /// <param name="baseDateTime">The base local date/time to use for comparisons.</param>
         /// <returns>The new comparer.</returns>
-        public static IComparer<Period?> CreateComparer(LocalDateTime baseDateTime) => new PeriodComparer(baseDateTime);
+        public static IComparer<Period> CreateComparer(LocalDateTime baseDateTime)
+        {
+            return new PeriodComparer(baseDateTime);
+        }
+
+        /// <summary>
+        /// Returns the property values in this period as an array.
+        /// </summary>
+        private long[] ToArray()
+        {
+            long[] values = new long[ValuesArraySize];
+            values[YearIndex] = years;
+            values[MonthIndex] = months;
+            values[WeekIndex] = weeks;
+            values[DayIndex] = days;
+            values[HourIndex] = hours;
+            values[MinuteIndex] = minutes;
+            values[SecondIndex] = seconds;
+            values[MillisecondIndex] = milliseconds;
+            values[TickIndex] = ticks;
+            return values;
+        }
+
+        /// <summary>
+        /// Adds all the values in this period to the given array of values (which is assumed to be of the right
+        /// length).
+        /// </summary>
+        private void AddValuesTo(long[] values)
+        {
+            values[YearIndex] += years;
+            values[MonthIndex] += months;
+            values[WeekIndex] += weeks;
+            values[DayIndex] += days;
+            values[HourIndex] += hours;
+            values[MinuteIndex] += minutes;
+            values[SecondIndex] += seconds;
+            values[MillisecondIndex] += milliseconds;
+            values[TickIndex] += ticks;
+        }
+
+        /// <summary>
+        /// Subtracts all the values in this period from the given array of values (which is assumed to be of the right
+        /// length).
+        /// </summary>
+        private void SubtractValuesFrom(long[] values)
+        {
+            values[YearIndex] -= years;
+            values[MonthIndex] -= months;
+            values[WeekIndex] -= weeks;
+            values[DayIndex] -= days;
+            values[HourIndex] -= hours;
+            values[MinuteIndex] -= minutes;
+            values[SecondIndex] -= seconds;
+            values[MillisecondIndex] -= milliseconds;
+            values[TickIndex] -= ticks;
+        }
 
         /// <summary>
         /// Subtracts one period from another, by simply subtracting each property value.
@@ -348,46 +379,11 @@ namespace NodaTime
         /// become zero (so "2 weeks, 1 days" minus "2 weeks" is "zero weeks, 1 days", not "1 days").</returns>
         public static Period operator -(Period minuend, Period subtrahend)
         {
-            Preconditions.CheckNotNull(minuend, nameof(minuend));
-            Preconditions.CheckNotNull(subtrahend, nameof(subtrahend));
-            return new Period(
-                minuend.Years - subtrahend.Years,
-                minuend.Months - subtrahend.Months,
-                minuend.Weeks - subtrahend.Weeks,
-                minuend.Days - subtrahend.Days,
-                minuend.Hours - subtrahend.Hours,
-                minuend.Minutes - subtrahend.Minutes,
-                minuend.Seconds - subtrahend.Seconds,
-                minuend.Milliseconds - subtrahend.Milliseconds,
-                minuend.Ticks - subtrahend.Ticks,
-                minuend.Nanoseconds - subtrahend.Nanoseconds);
-        }
-
-        /// <summary>
-        /// Subtracts one period from another, by simply subtracting each property value.
-        /// </summary>
-        /// <param name="minuend">The period to subtract the second operand from</param>
-        /// <param name="subtrahend">The period to subtract the first operand from</param>
-        /// <returns>The result of subtracting all the values in the second operand from the values in the first. The
-        /// units of the result will be the union of both periods, even if the subtraction caused some properties to
-        /// become zero (so "2 weeks, 1 days" minus "2 weeks" is "zero weeks, 1 days", not "1 days").</returns>
-        public static Period Subtract(Period minuend, Period subtrahend) => minuend - subtrahend;
-
-        /// <summary>
-        /// Returns the number of days between two <see cref="LocalDate"/> objects.
-        /// </summary>
-        /// <param name="start">Start date/time</param>
-        /// <param name="end">End date/time</param> 
-        /// <exception cref="ArgumentException"><paramref name="start"/> and <paramref name="end"/> use different calendars.</exception>
-        /// <returns>The number of days between the given dates.</returns>
-        public static int DaysBetween(LocalDate start, LocalDate end)
-        {
-            Preconditions.CheckArgument(
-                start.Calendar.Equals(end.Calendar),
-                nameof(end),
-                "start and end must use the same calendar system");
-
-            return InternalDaysBetween(start, end);
+            Preconditions.CheckNotNull(minuend, "minuend");
+            Preconditions.CheckNotNull(subtrahend, "subtrahend");
+            long[] sum = minuend.ToArray();
+            subtrahend.SubtractValuesFrom(sum);
+            return new Period(sum);
         }
 
         /// <summary>
@@ -408,160 +404,67 @@ namespace NodaTime
         /// <returns>The period between the given date/times, using the given units.</returns>
         public static Period Between(LocalDateTime start, LocalDateTime end, PeriodUnits units)
         {
-            Preconditions.CheckArgument(units != 0, nameof(units), "Units must not be empty");
-            Preconditions.CheckArgument((units & ~PeriodUnits.AllUnits) == 0, nameof(units), "Units contains an unknown value: {0}", units);
+            Preconditions.CheckArgument(units != 0, "units", "Units must not be empty");
+            Preconditions.CheckArgument((units & ~PeriodUnits.AllUnits) == 0, "units", "Units contains an unknown value: {0}", units);
             CalendarSystem calendar = start.Calendar;
-            Preconditions.CheckArgument(calendar.Equals(end.Calendar), nameof(end), "start and end must use the same calendar system");
+            Preconditions.CheckArgument(calendar.Equals(end.Calendar), "end", "start and end must use the same calendar system");
 
-            if (start == end)
+            LocalInstant startLocalInstant = start.LocalInstant;
+            LocalInstant endLocalInstant = end.LocalInstant;
+
+            if (startLocalInstant == endLocalInstant)
             {
                 return Zero;
             }
 
-            // Adjust for situations like "days between 5th January 10am and 7th January 5am" which should be one
-            // day, because if we actually reach 7th January with date fields, we've overshot.
-            // The date adjustment will always be valid, because it's just moving it towards start.
-            // We need this for all date-based period fields. We could potentially optimize by not doing this
-            // in cases where we've only got time fields...
-            LocalDate endDate = end.Date;
-            if (start < end)
-            {
-                if (start.TimeOfDay > end.TimeOfDay)
-                {
-                    endDate = endDate.PlusDays(-1);
-                }
-            }
-            else if (start > end && start.TimeOfDay < end.TimeOfDay)
-            {
-                endDate = endDate.PlusDays(1);
-            }
+            PeriodFieldSet fields = calendar.PeriodFields;
 
             // Optimization for single field
-            switch (units)
+            var singleField = GetSingleField(fields, units);
+            if (singleField != null)
             {
-                case PeriodUnits.Years: return FromYears(DatePeriodFields.YearsField.UnitsBetween(start.Date, endDate));
-                case PeriodUnits.Months: return FromMonths(DatePeriodFields.MonthsField.UnitsBetween(start.Date, endDate));
-                case PeriodUnits.Weeks: return FromWeeks(DatePeriodFields.WeeksField.UnitsBetween(start.Date, endDate));
-                case PeriodUnits.Days: return FromDays(InternalDaysBetween(start.Date, endDate));
-                case PeriodUnits.Hours: return FromHours(TimePeriodField.Hours.UnitsBetween(start, end));
-                case PeriodUnits.Minutes: return FromMinutes(TimePeriodField.Minutes.UnitsBetween(start, end));
-                case PeriodUnits.Seconds: return FromSeconds(TimePeriodField.Seconds.UnitsBetween(start, end));
-                case PeriodUnits.Milliseconds: return FromMilliseconds(TimePeriodField.Milliseconds.UnitsBetween(start, end));
-                case PeriodUnits.Ticks: return FromTicks(TimePeriodField.Ticks.UnitsBetween(start, end));
-                case PeriodUnits.Nanoseconds: return FromNanoseconds(TimePeriodField.Nanoseconds.UnitsBetween(start, end));
+                long value = singleField.Subtract(end.LocalInstant, start.LocalInstant);
+                return new Period(units, value);
             }
 
             // Multiple fields
-            LocalDateTime remaining = start;
-            int years = 0, months = 0, weeks = 0, days = 0;
-            if ((units & PeriodUnits.AllDateUnits) != 0)
-            {
-                LocalDate remainingDate = DateComponentsBetween(
-                    start.Date, endDate, units, out years, out months, out weeks, out days);
-                remaining = new LocalDateTime(remainingDate, start.TimeOfDay);
-            }
-            if ((units & PeriodUnits.AllTimeUnits) == 0)
-            {
-                return new Period(years, months, weeks, days);
-            }
+            long[] values = new long[ValuesArraySize];
 
-            // The remainder of the computation is with fixed-length units, so we can do it all with
-            // Duration instead of Local* values. We don't know for sure that this is small though - we *could*
-            // be trying to find the difference between 9998 BC and 9999 CE in nanoseconds...
-            // Where we can optimize, do everything with long arithmetic (as we do for Between(LocalTime, LocalTime)).
-            // Otherwise (rare case), use duration arithmetic.
-            long hours, minutes, seconds, milliseconds, ticks, nanoseconds;
-            var duration = end.ToLocalInstant().TimeSinceLocalEpoch - remaining.ToLocalInstant().TimeSinceLocalEpoch;
-            if (duration.IsInt64Representable)
+            LocalInstant remaining = startLocalInstant;
+            int numericFields = (int) units;
+            for (int i = 0; i < ValuesArraySize; i++)
             {
-                TimeComponentsBetween(duration.ToInt64Nanoseconds(), units, out hours, out minutes, out seconds, out milliseconds, out ticks, out nanoseconds);
-            }
-            else
-            {
-                hours = UnitsBetween(PeriodUnits.Hours, TimePeriodField.Hours);
-                minutes = UnitsBetween(PeriodUnits.Minutes, TimePeriodField.Minutes);
-                seconds = UnitsBetween(PeriodUnits.Seconds, TimePeriodField.Seconds);
-                milliseconds = UnitsBetween(PeriodUnits.Milliseconds, TimePeriodField.Milliseconds);
-                ticks = UnitsBetween(PeriodUnits.Ticks, TimePeriodField.Ticks);
-                nanoseconds = UnitsBetween(PeriodUnits.Ticks, TimePeriodField.Nanoseconds);
-            }
-            return new Period(years, months, weeks, days, hours, minutes, seconds, milliseconds, ticks, nanoseconds);
-
-            long UnitsBetween(PeriodUnits mask, TimePeriodField timeField)
-            {
-                if ((mask & units) == 0)
+                if ((numericFields & (1 << i)) != 0)
                 {
-                    return 0;
+                    var field = GetFieldForIndex(fields, i);
+                    values[i] = field.Subtract(endLocalInstant, remaining);
+                    remaining = field.Add(remaining, values[i]);
                 }
-                long value = timeField.GetUnitsInDuration(duration);
-                duration -= timeField.ToDuration(value);
-                return value;
             }
+            return new Period(values);
         }
 
         /// <summary>
-        /// Common code to perform the date parts of the Between methods.
+        /// Adds the contents of this period to the given local instant in the given calendar system.
         /// </summary>
-        /// <param name="start">Start date</param>
-        /// <param name="end">End date</param>
-        /// <param name="units">Units to compute</param>
-        /// <param name="years">(Out) Year component of result</param>
-        /// <param name="months">(Out) Months component of result</param>
-        /// <param name="weeks">(Out) Weeks component of result</param>
-        /// <param name="days">(Out) Days component of result</param>
-        /// <returns>The resulting date after adding the result components to <paramref name="start"/> (to
-        /// allow further computations to be made)</returns>
-        private static LocalDate DateComponentsBetween(LocalDate start, LocalDate end, PeriodUnits units,
-            out int years, out int months, out int weeks, out int days)
+        internal LocalInstant AddTo(LocalInstant localInstant, CalendarSystem calendar, int scalar)
         {
-            LocalDate result = start;
-            years = UnitsBetween(units & PeriodUnits.Years, ref result, end, DatePeriodFields.YearsField);
-            months = UnitsBetween(units & PeriodUnits.Months, ref result, end, DatePeriodFields.MonthsField);
-            weeks = UnitsBetween(units & PeriodUnits.Weeks, ref result, end, DatePeriodFields.WeeksField);
-            days = UnitsBetween(units & PeriodUnits.Days, ref result, end, DatePeriodFields.DaysField);
+            Preconditions.CheckNotNull(calendar, "calendar");
 
-            int UnitsBetween(PeriodUnits maskedUnits, ref LocalDate startDate, LocalDate endDate, IDatePeriodField dateField)
-            {
-                if (maskedUnits == 0)
-                {
-                    return 0;
-                }
-                int value = dateField.UnitsBetween(startDate, endDate);
-                startDate = dateField.Add(startDate, value);
-                return value;
-            }
+            PeriodFieldSet fields = calendar.PeriodFields;
+            LocalInstant result = localInstant;
+
+            if (years != 0) result = fields.Years.Add(result, years * scalar);
+            if (months != 0) result = fields.Months.Add(result, months * scalar);
+            if (weeks != 0) result = fields.Weeks.Add(result, weeks * scalar);
+            if (days != 0) result = fields.Days.Add(result, days * scalar);
+            if (hours != 0) result = fields.Hours.Add(result, hours * scalar);
+            if (minutes != 0) result = fields.Minutes.Add(result, minutes * scalar);
+            if (seconds != 0) result = fields.Seconds.Add(result, seconds * scalar);
+            if (milliseconds != 0) result = fields.Milliseconds.Add(result, milliseconds * scalar);
+            if (ticks != 0) result = fields.Ticks.Add(result, ticks * scalar);
+
             return result;
-        }
-
-        /// <summary>
-        /// Common code to perform the time parts of the Between methods for long-representable nanos.
-        /// </summary>
-        /// <param name="totalNanoseconds">Number of nanoseconds to compute the units of</param>
-        /// <param name="units">Units to compute</param>
-        /// <param name="hours">(Out) Hours component of result</param>
-        /// <param name="minutes">(Out) Minutes component of result</param>
-        /// <param name="seconds">(Out) Seconds component of result</param>
-        /// <param name="milliseconds">(Out) Milliseconds component of result</param>
-        /// <param name="ticks">(Out) Ticks component of result</param>
-        /// <param name="nanoseconds">(Out) Nanoseconds component of result</param>
-        private static void TimeComponentsBetween(long totalNanoseconds, PeriodUnits units,
-            out long hours, out long minutes, out long seconds, out long milliseconds, out long ticks, out long nanoseconds)
-        {
-            hours = UnitsBetween(PeriodUnits.Hours, NanosecondsPerHour);
-            minutes = UnitsBetween(PeriodUnits.Minutes, NanosecondsPerMinute);
-            seconds = UnitsBetween(PeriodUnits.Seconds, NanosecondsPerSecond);
-            milliseconds = UnitsBetween(PeriodUnits.Milliseconds, NanosecondsPerMillisecond);
-            ticks = UnitsBetween(PeriodUnits.Ticks, NanosecondsPerTick);
-            nanoseconds = UnitsBetween(PeriodUnits.Nanoseconds, 1);
-
-            long UnitsBetween(PeriodUnits mask, long nanosecondsPerUnit)
-            {
-                if ((mask & units) == 0)
-                {
-                    return 0;
-                }
-                return Math.DivRem(totalNanoseconds, nanosecondsPerUnit, out totalNanoseconds);
-            }
         }
 
         /// <summary>
@@ -574,8 +477,10 @@ namespace NodaTime
         /// <param name="start">Start date/time</param>
         /// <param name="end">End date/time</param>
         /// <returns>The period between the two date and time values, using all units.</returns>
-        [Pure]
-        public static Period Between(LocalDateTime start, LocalDateTime end) => Between(start, end, PeriodUnits.DateAndTime);
+        public static Period Between(LocalDateTime start, LocalDateTime end)
+        {
+            return Between(start, end, PeriodUnits.DateAndTime);
+        }
 
         /// <summary>
         /// Returns the period between a start and an end date, using only the given units.
@@ -593,32 +498,10 @@ namespace NodaTime
         /// <exception cref="ArgumentException"><paramref name="units"/> contains time units, is empty or contains unknown values.</exception>
         /// <exception cref="ArgumentException"><paramref name="start"/> and <paramref name="end"/> use different calendars.</exception>
         /// <returns>The period between the given dates, using the given units.</returns>
-        [Pure]
         public static Period Between(LocalDate start, LocalDate end, PeriodUnits units)
         {
-            Preconditions.CheckArgument((units & PeriodUnits.AllTimeUnits) == 0, nameof(units), "Units contains time units: {0}", units);
-            Preconditions.CheckArgument(units != 0, nameof(units), "Units must not be empty");
-            Preconditions.CheckArgument((units & ~PeriodUnits.AllUnits) == 0, nameof(units), "Units contains an unknown value: {0}", units);
-            CalendarSystem calendar = start.Calendar;
-            Preconditions.CheckArgument(calendar.Equals(end.Calendar), nameof(end), "start and end must use the same calendar system");
-
-            if (start == end)
-            {
-                return Zero;
-            }
-
-            // Optimization for single field
-            switch (units)
-            {
-                case PeriodUnits.Years: return FromYears(DatePeriodFields.YearsField.UnitsBetween(start, end));
-                case PeriodUnits.Months: return FromMonths(DatePeriodFields.MonthsField.UnitsBetween(start, end));
-                case PeriodUnits.Weeks: return FromWeeks(DatePeriodFields.WeeksField.UnitsBetween(start, end));
-                case PeriodUnits.Days: return FromDays(InternalDaysBetween(start, end));
-            }
-
-            // Multiple fields
-            DateComponentsBetween(start, end, units, out int years, out int months, out int weeks, out int days);
-            return new Period(years, months, weeks, days);
+            Preconditions.CheckArgument((units & PeriodUnits.AllTimeUnits) == 0, "units", "Units contains time units: {0}", units);
+            return Between(start.AtMidnight(), end.AtMidnight(), units);
         }
 
         /// <summary>
@@ -627,16 +510,14 @@ namespace NodaTime
         /// <remarks>
         /// If <paramref name="end"/> is before <paramref name="start" />, each property in the returned period
         /// will be negative.
-        /// The calendar systems of the two dates must be the same; an exception will be thrown otherwise.
         /// </remarks>
         /// <param name="start">Start date</param>
         /// <param name="end">End date</param>
         /// <returns>The period between the two dates, using year, month and day units.</returns>
-        /// <exception cref="ArgumentException">
-        /// <paramref name="start"/> and <paramref name="end"/> are not in the same calendar system.
-        /// </exception>
-        [Pure]
-        public static Period Between(LocalDate start, LocalDate end) => Between(start, end, PeriodUnits.YearMonthDay);
+        public static Period Between(LocalDate start, LocalDate end)
+        {
+            return Between(start.AtMidnight(), end.AtMidnight(), PeriodUnits.YearMonthDay);
+        }
 
         /// <summary>
         /// Returns the period between a start and an end time, using only the given units.
@@ -654,32 +535,10 @@ namespace NodaTime
         /// <exception cref="ArgumentException"><paramref name="units"/> contains date units, is empty or contains unknown values.</exception>
         /// <exception cref="ArgumentException"><paramref name="start"/> and <paramref name="end"/> use different calendars.</exception>
         /// <returns>The period between the given times, using the given units.</returns>
-        [Pure]
         public static Period Between(LocalTime start, LocalTime end, PeriodUnits units)
         {
-            Preconditions.CheckArgument((units & PeriodUnits.AllDateUnits) == 0, nameof(units), "Units contains date units: {0}", units);
-            Preconditions.CheckArgument(units != 0, nameof(units), "Units must not be empty");
-            Preconditions.CheckArgument((units & ~PeriodUnits.AllUnits) == 0, nameof(units), "Units contains an unknown value: {0}", units);
-
-            // We know that the difference is in the range of +/- 1 day, which is a relatively small
-            // number of nanoseconds. All the operations can be done with simple long division/remainder ops,
-            // so we don't need to delegate to TimePeriodField.
-
-            long remaining = unchecked(end.NanosecondOfDay - start.NanosecondOfDay);
-
-            // Optimization for a single unit
-            switch (units)
-            {
-                case PeriodUnits.Hours: return FromHours(remaining / NanosecondsPerHour);
-                case PeriodUnits.Minutes: return FromMinutes(remaining / NanosecondsPerMinute);
-                case PeriodUnits.Seconds: return FromSeconds(remaining / NanosecondsPerSecond);
-                case PeriodUnits.Milliseconds: return FromMilliseconds(remaining / NanosecondsPerMillisecond);
-                case PeriodUnits.Ticks: return FromTicks(remaining / NanosecondsPerTick);
-                case PeriodUnits.Nanoseconds: return FromNanoseconds(remaining);
-            }
-
-            TimeComponentsBetween(remaining, units, out long hours, out long minutes, out long seconds, out long milliseconds, out long ticks, out long nanoseconds);
-            return new Period(hours, minutes, seconds, milliseconds, ticks, nanoseconds);
+            Preconditions.CheckArgument((units & PeriodUnits.AllDateUnits) == 0, "units", "Units contains date units: {0}", units);
+            return Between(start.LocalDateTime, end.LocalDateTime, units);
         }
 
         /// <summary>
@@ -692,104 +551,32 @@ namespace NodaTime
         /// <param name="start">Start time</param>
         /// <param name="end">End time</param>
         /// <returns>The period between the two times, using the time period units.</returns>
-        [Pure]
-        public static Period Between(LocalTime start, LocalTime end) => Between(start, end, PeriodUnits.AllTimeUnits);
-
-        /// <summary>
-        /// Returns the number of days between two dates. This allows optimizations in DateInterval,
-        /// and for date calculations which just use days - we don't need state or a virtual method invocation.
-        /// </summary>
-        internal static int InternalDaysBetween(LocalDate start, LocalDate end)
+        public static Period Between(LocalTime start, LocalTime end)
         {
-            // We already assume the calendars are the same.
-            if (start.YearMonthDay == end.YearMonthDay)
-            {
-                return 0;
-            }
-            // Note: I've experimented with checking for the dates being in the same year and optimizing that.
-            // It helps a little if they're in the same month, but just that test has a cost for other situations.
-            // Being able to find the day of year if they're in the same year but different months doesn't help,
-            // somewhat surprisingly.
-            int startDays = start.DaysSinceEpoch;
-            int endDays = end.DaysSinceEpoch;
-            return endDays - startDays;
+            return Between(start.LocalDateTime, end.LocalDateTime, PeriodUnits.AllTimeUnits);
         }
-
-        /// <summary>
-        /// Returns the period between a start and an end <see cref="YearMonth"/>, using only the given units.
-        /// </summary>
-        /// <remarks>
-        /// If <paramref name="end"/> is before <paramref name="start" />, each property in the returned period
-        /// will be negative. If the given set of units cannot exactly reach the end point (e.g. finding
-        /// the difference between February 2010 and March 2012 in years) the result will be such that adding it to <paramref name="start"/>
-        /// will give a value between <paramref name="start"/> and <paramref name="end"/>. In other words,
-        /// any rounding is "towards start"; this is true whether the resulting period is negative or positive.
-        /// </remarks>
-        /// <param name="start">Start year and month</param>
-        /// <param name="end">End year and month</param>
-        /// <param name="units">Units to use for calculations</param>
-        /// <exception cref="ArgumentException"><paramref name="units"/> is empty or contains anything other than than PeriodUnits.Years
-        /// and/or PeriodUnits.Months.</exception>
-        /// <exception cref="ArgumentException"><paramref name="start"/> and <paramref name="end"/> use different calendars.</exception>
-        /// <returns>The period between the given YearMonths, using the given units.</returns>
-        [Pure]
-        public static Period Between(YearMonth start, YearMonth end, PeriodUnits units)
-        {
-            Preconditions.CheckArgument((units & (PeriodUnits.AllUnits ^ PeriodUnits.Years ^ PeriodUnits.Months)) == 0,
-                nameof(units), "Units can only contain year and month units: {0}", units);
-            Preconditions.CheckArgument(units != 0, nameof(units), "Units must not be empty");
-            Preconditions.CheckArgument((units & ~PeriodUnits.AllUnits) == 0, nameof(units), "Units contains an unknown value: {0}", units);
-            CalendarSystem calendar = start.Calendar;
-            Preconditions.CheckArgument(calendar.Equals(end.Calendar), nameof(end), "start and end must use the same calendar system");
-
-            if (start == end)
-            {
-                return Zero;
-            }
-
-            LocalDate startDate = start.StartDate;
-            LocalDate endDate = end.StartDate;
-
-            // Optimization for single field
-            switch (units)
-            {
-                case PeriodUnits.Years: return FromYears(DatePeriodFields.YearsField.UnitsBetween(startDate, endDate));
-                case PeriodUnits.Months: return FromMonths(DatePeriodFields.MonthsField.UnitsBetween(startDate, endDate));
-            }
-
-            // Multiple fields
-            DateComponentsBetween(startDate, endDate, units, out int years, out int months, out _, out _);
-            return new Period(years, months, 0, 0);
-        }
-
-        /// <summary>
-        /// Returns the exact difference between two <see cref="YearMonth"/>.
-        /// </summary>
-        /// <remarks>
-        /// If <paramref name="end"/> is before <paramref name="start" />, each property in the returned period
-        /// will be negative.
-        /// The calendar systems of the two dates must be the same; an exception will be thrown otherwise.
-        /// </remarks>
-        /// <param name="start">Start year and month</param>
-        /// <param name="end">End year and month</param>
-        /// <returns>The period between the two YearMonths, using year and month units.</returns>
-        /// <exception cref="ArgumentException">
-        /// <paramref name="start"/> and <paramref name="end"/> are not in the same calendar system.
-        /// </exception>
-        [Pure]
-        public static Period Between(YearMonth start, YearMonth end) => Between(start, end, PeriodUnits.Years | PeriodUnits.Months);
 
         /// <summary>
         /// Returns whether or not this period contains any non-zero-valued time-based properties (hours or lower).
         /// </summary>
-        /// <value>true if the period contains any non-zero-valued time-based properties (hours or lower); false otherwise.</value>
-        public bool HasTimeComponent => Hours != 0 || Minutes != 0 || Seconds != 0 || Milliseconds != 0 || Ticks != 0 || Nanoseconds != 0;
+        public bool HasTimeComponent
+        {
+            get
+            {
+                return hours != 0 || minutes != 0 || seconds != 0 || milliseconds != 0 || ticks != 0;
+            }
+        }
 
         /// <summary>
         /// Returns whether or not this period contains any non-zero date-based properties (days or higher).
         /// </summary>
-        /// <value>true if this period contains any non-zero date-based properties (days or higher); false otherwise.</value>
-        public bool HasDateComponent => Years != 0 || Months != 0 || Weeks != 0 || Days != 0;
+        public bool HasDateComponent
+        {
+            get
+            {
+                return years != 0 || months != 0 || weeks != 0 || days != 0;
+            }
+        }
 
         /// <summary>
         /// For periods that do not contain a non-zero number of years or months, returns a duration for this period
@@ -808,22 +595,26 @@ namespace NodaTime
             {
                 throw new InvalidOperationException("Cannot construct duration of period with non-zero months or years.");
             }
-            return Duration.FromNanoseconds(TotalNanoseconds);
+            return Duration.FromTicks(TotalStandardTicks);
         }
 
         /// <summary>
-        /// Gets the total number of nanoseconds duration for the 'standard' properties (all bar years and months).
+        /// Gets the total number of ticks duration for the 'standard' properties (all bar years and months).
         /// </summary>
-        /// <value>The total number of nanoseconds duration for the 'standard' properties (all bar years and months).</value>
-        private long TotalNanoseconds =>
-            Nanoseconds +
-                Ticks * NanosecondsPerTick +
-                Milliseconds * NanosecondsPerMillisecond +
-                Seconds * NanosecondsPerSecond +
-                Minutes * NanosecondsPerMinute +
-                Hours * NanosecondsPerHour +
-                Days * NanosecondsPerDay +
-                Weeks * NanosecondsPerWeek;
+        private long TotalStandardTicks
+        {
+            get
+            {
+                // This can overflow even when it wouldn't necessarily need to. See comments elsewhere.
+                return ticks +
+                    milliseconds * NodaConstants.TicksPerMillisecond +
+                    seconds * NodaConstants.TicksPerSecond +
+                    minutes * NodaConstants.TicksPerMinute +
+                    hours * NodaConstants.TicksPerHour +
+                    days * NodaConstants.TicksPerStandardDay +
+                    weeks * NodaConstants.TicksPerStandardWeek;
+            }
+        }
 
         /// <summary>
         /// Creates a <see cref="PeriodBuilder"/> from this instance. The new builder
@@ -831,7 +622,11 @@ namespace NodaTime
         /// changes made to the builder are not reflected in this period.
         /// </summary>
         /// <returns>A builder with the same values and units as this period.</returns>
-        [Pure] [TestExemption(TestExemptionCategory.ConversionName)] public PeriodBuilder ToBuilder() => new PeriodBuilder(this);
+        [Pure]
+        public PeriodBuilder ToBuilder()
+        {
+            return new PeriodBuilder(this);
+        }
 
         /// <summary>
         /// Returns a normalized version of this period, such that equivalent (but potentially non-equal) periods are
@@ -840,18 +635,18 @@ namespace NodaTime
         /// <remarks>
         /// Months and years are unchanged
         /// (as they can vary in length), but weeks are multiplied by 7 and added to the
-        /// Days property, and all time properties are normalized to their natural range.
-        /// Subsecond values are normalized to millisecond and "nanosecond within millisecond" values.
-        /// So for example, a period of 25 hours becomes a period of 1 day
-        /// and 1 hour. A period of 1,500,750,000 nanoseconds becomes 1 second, 500 milliseconds and
-        /// 750,000 nanoseconds. Aside from months and years, either all the properties
-        /// end up positive, or they all end up negative. "Week" and "tick" units in the returned period are always 0.
+        /// Days property, and all time properties are normalized to their natural range
+        /// (where ticks are "within a millisecond"), adding to the larger property where
+        /// necessary. So for example, a period of 25 hours becomes a period of 1 day
+        /// and 1 hour. Aside from months and years, either all the properties
+        /// end up positive, or they all end up negative.
         /// </remarks>
         /// <exception cref="OverflowException">The period doesn't have years or months, but it contains more than
-        /// <see cref="Int64.MaxValue"/> nanoseconds when the combined weeks/days/time portions are considered. This is
-        /// over 292 years, so unlikely to be a problem in normal usage.
+        /// <see cref="Int64.MaxValue"/> ticks when the combined weeks/days/time portions are considered. Such a period
+        /// could never be useful anyway, however.
         /// In some cases this may occur even though the theoretical result would be valid due to balancing positive and
-        /// negative values, but for simplicity there is no attempt to work around this.</exception>
+        /// negative values, but for simplicity there is no attempt to work around this - in realistic periods, it
+        /// shouldn't be a problem.</exception>
         /// <returns>The normalized period.</returns>
         /// <seealso cref="NormalizingEqualityComparer"/>
         [Pure]
@@ -859,94 +654,257 @@ namespace NodaTime
         {
             // Simplest way to normalize: grab all the fields up to "week" and
             // sum them.
-            long totalNanoseconds = TotalNanoseconds;
-            int days = (int) (totalNanoseconds / NanosecondsPerDay);
-            long hours = (totalNanoseconds / NanosecondsPerHour) % HoursPerDay;
-            long minutes = (totalNanoseconds / NanosecondsPerMinute) % MinutesPerHour;
-            long seconds = (totalNanoseconds / NanosecondsPerSecond) % SecondsPerMinute;
-            long milliseconds = (totalNanoseconds / NanosecondsPerMillisecond) % MillisecondsPerSecond;
-            long nanoseconds = totalNanoseconds % NanosecondsPerMillisecond;
+            long totalTicks = TotalStandardTicks;
+            long days = totalTicks / NodaConstants.TicksPerStandardDay;
+            long hours = (totalTicks / NodaConstants.TicksPerHour) % NodaConstants.HoursPerStandardDay;
+            long minutes = (totalTicks / NodaConstants.TicksPerMinute) % NodaConstants.MinutesPerHour;
+            long seconds = (totalTicks / NodaConstants.TicksPerSecond) % NodaConstants.SecondsPerMinute;
+            long milliseconds = (totalTicks / NodaConstants.TicksPerMillisecond) % NodaConstants.MillisecondsPerSecond;
+            long ticks = totalTicks % NodaConstants.TicksPerMillisecond;
 
-            return new Period(this.Years, this.Months, 0 /* weeks */, days, hours, minutes, seconds, milliseconds, 0 /* ticks */, nanoseconds);
+            return new Period(this.years, this.months, 0 /* weeks */, days, hours, minutes, seconds, milliseconds, ticks);
         }
+
+        /// <summary>
+        /// Returns the PeriodField for the given unit value, or null if the values does
+        /// not represent a single unit.
+        /// </summary>
+        private static IPeriodField GetSingleField(PeriodFieldSet fields, PeriodUnits units)
+        {
+            switch (units)
+            {
+                case PeriodUnits.Years: return fields.Years;
+                case PeriodUnits.Months: return fields.Months;
+                case PeriodUnits.Weeks: return fields.Weeks;
+                case PeriodUnits.Days: return fields.Days;
+                case PeriodUnits.Hours: return fields.Hours;
+                case PeriodUnits.Minutes: return fields.Minutes;
+                case PeriodUnits.Seconds: return fields.Seconds;
+                case PeriodUnits.Milliseconds: return fields.Milliseconds;
+                case PeriodUnits.Ticks: return fields.Ticks;
+                default: return null;
+            }
+        }
+
+        /// <summary>
+        /// Returns the PeriodField for the given index, in the range 0-8 inclusive.
+        /// </summary>
+        private static IPeriodField GetFieldForIndex(PeriodFieldSet fields, int index)
+        {
+            switch (index)
+            {
+                case YearIndex: return fields.Years;
+                case MonthIndex: return fields.Months;
+                case WeekIndex: return fields.Weeks;
+                case DayIndex: return fields.Days;
+                case HourIndex: return fields.Hours;
+                case MinuteIndex: return fields.Minutes;
+                case SecondIndex: return fields.Seconds;
+                case MillisecondIndex: return fields.Milliseconds;
+                case TickIndex: return fields.Ticks;
+                default: throw new ArgumentOutOfRangeException("index");
+            }
+        }
+
+        #region Helper properties
+        /// <summary>
+        /// Gets the number of years within this period.
+        /// </summary>
+        /// <remarks>
+        /// This property returns zero both when the property has been explicitly set to zero and when the period does not
+        /// contain this property.
+        /// </remarks>
+        public long Years { get { return years; } }
+        /// <summary>
+        /// Gets the number of months within this period.
+        /// </summary>
+        /// <remarks>
+        /// This property returns zero both when the property has been explicitly set to zero and when the period does not
+        /// contain this property.
+        /// </remarks>
+        public long Months { get { return months; } }
+        /// <summary>
+        /// Gets the number of weeks within this period.
+        /// </summary>
+        /// <remarks>
+        /// This property returns zero both when the property has been explicitly set to zero and when the period does not
+        /// contain this property.
+        /// </remarks>
+        public long Weeks { get { return weeks; } }
+        /// <summary>
+        /// Gets the number of days within this period.
+        /// </summary>
+        /// <remarks>
+        /// This property returns zero both when the property has been explicitly set to zero and when the period does not
+        /// contain this property.
+        /// </remarks>
+        public long Days { get { return days; } }
+        /// <summary>
+        /// Gets the number of hours within this period.
+        /// </summary>
+        /// <remarks>
+        /// This property returns zero both when the property has been explicitly set to zero and when the period does not
+        /// contain this property.
+        /// </remarks>
+        public long Hours { get { return hours; } }
+        /// <summary>
+        /// Gets the number of minutes within this period.
+        /// </summary>
+        /// <remarks>
+        /// This property returns zero both when the property has been explicitly set to zero and when the period does not
+        /// contain this property.
+        /// </remarks>
+        public long Minutes { get { return minutes; } }
+        /// <summary>
+        /// Gets the number of seconds within this period.
+        /// </summary>
+        /// <remarks>
+        /// This property returns zero both when the property has been explicitly set to zero and when the period does not
+        /// contain this property.
+        /// </remarks>
+        public long Seconds { get { return seconds; } }
+        /// <summary>
+        /// Gets the number of milliseconds within this period.
+        /// </summary>
+        /// <remarks>
+        /// This property returns zero both when the property has been explicitly set to zero and when the period does not
+        /// contain this property.
+        /// </remarks>
+        public long Milliseconds { get { return milliseconds; } }
+        /// <summary>
+        /// Gets the number of ticks within this period.
+        /// </summary>
+        /// <remarks>
+        /// This property returns zero both when the property has been explicitly set to zero and when the period does not
+        /// contain this property.
+        /// </remarks>
+        public long Ticks { get { return ticks; } }
+        #endregion
 
         #region Object overrides
 
         /// <summary>
-        /// Returns this string formatted according to the <see cref="PeriodPattern.Roundtrip"/>.
+        /// Returns this string formatted according to the <see cref="PeriodPattern.RoundtripPattern"/>.
         /// </summary>
         /// <returns>A formatted representation of this period.</returns>
-        public override string ToString() => PeriodPattern.Roundtrip.Format(this);
+        public override string ToString()
+        {
+            return PeriodPattern.RoundtripPattern.Format(this);
+        }
 
         /// <summary>
-        /// Compares the given object for equality with this one, as per <see cref="Equals(Period?)"/>.
-        /// See the type documentation for a description of equality semantics.
+        /// Compares the given object for equality with this one, as per <see cref="Equals(Period)"/>.
         /// </summary>
         /// <param name="other">The value to compare this one with.</param>
-        /// <returns>true if the other object is a period equal to this one, consistent with <see cref="Equals(Period?)"/></returns>
-        public override bool Equals(object? other) => Equals(other as Period);
+        /// <returns>true if the other object is a period equal to this one, consistent with <see cref="Equals(Period)"/></returns>
+        public override bool Equals(object other)
+        {
+            return Equals(other as Period);
+        }
 
         /// <summary>
-        /// Returns the hash code for this period, consistent with <see cref="Equals(Period?)"/>.
-        /// See the type documentation for a description of equality semantics.
+        /// Returns the hash code for this period, consistent with <see cref="Equals(Period)"/>.
         /// </summary>
         /// <returns>The hash code for this period.</returns>
-        public override int GetHashCode() =>
-            HashCodeHelper.Initialize()
-                .Hash(Years)
-                .Hash(Months)
-                .Hash(Weeks)
-                .Hash(Days)
-                .Hash(Hours)
-                .Hash(Minutes)
-                .Hash(Seconds)
-                .Hash(Milliseconds)
-                .Hash(Ticks)
-                .Hash(Nanoseconds)
-                .Value;
+        public override int GetHashCode()
+        {
+            int hash = HashCodeHelper.Initialize();
+            hash = HashCodeHelper.Hash(hash, years);
+            hash = HashCodeHelper.Hash(hash, months);
+            hash = HashCodeHelper.Hash(hash, weeks);
+            hash = HashCodeHelper.Hash(hash, days);
+            hash = HashCodeHelper.Hash(hash, hours);
+            hash = HashCodeHelper.Hash(hash, minutes);
+            hash = HashCodeHelper.Hash(hash, seconds);
+            hash = HashCodeHelper.Hash(hash, milliseconds);
+            hash = HashCodeHelper.Hash(hash, ticks);
+            return hash;
+        }
 
         /// <summary>
         /// Compares the given period for equality with this one.
-        /// See the type documentation for a description of equality semantics.
         /// </summary>
+        /// <remarks>
+        /// Periods are equal if they contain the same values for the same properties.
+        /// However, no normalization takes place, so "one hour" is not equal to "sixty minutes".
+        /// </remarks>
         /// <param name="other">The period to compare this one with.</param>
         /// <returns>True if this period has the same values for the same properties as the one specified.</returns>
-        public bool Equals(Period? other) =>
-            other != null &&
-            Years == other.Years &&
-            Months == other.Months &&
-            Weeks == other.Weeks &&
-            Days == other.Days &&
-            Hours == other.Hours &&
-            Minutes == other.Minutes &&
-            Seconds == other.Seconds &&
-            Milliseconds == other.Milliseconds &&
-            Ticks == other.Ticks &&
-            Nanoseconds == other.Nanoseconds;
+        public bool Equals(Period other)
+        {
+            if (other == null)
+            {
+                return false;
+            }
 
-        /// <summary>
-        /// Implements the operator == (equality).
-        /// See the type documentation for a description of equality semantics.
-        /// </summary>
-        /// <param name="left">The left hand side of the operator.</param>
-        /// <param name="right">The right hand side of the operator.</param>
-        /// <returns><c>true</c> if values are equal to each other, otherwise <c>false</c>.</returns>
-        public static bool operator ==(Period? left, Period? right) => ReferenceEquals(left, right) || (left is object && left.Equals(right));
-
-        /// <summary>
-        /// Implements the operator != (inequality).
-        /// See the type documentation for a description of equality semantics.
-        /// </summary>
-        /// <param name="left">The left hand side of the operator.</param>
-        /// <param name="right">The right hand side of the operator.</param>
-        /// <returns><c>true</c> if values are not equal to each other, otherwise <c>false</c>.</returns>
-        public static bool operator !=(Period? left, Period? right) => !(left == right);
+            return years == other.years &&
+                months == other.months &&
+                weeks == other.weeks &&
+                days == other.days &&
+                hours == other.hours &&
+                minutes == other.minutes &&
+                seconds == other.seconds &&
+                milliseconds == other.milliseconds &&
+                ticks == other.ticks;
+        }
         #endregion
+
+#if !PCL
+        #region Binary serialization
+        private const string YearsSerializationName = "years";
+        private const string MonthsSerializationName = "months";
+        private const string WeeksSerializationName = "weeks";
+        private const string DaysSerializationName = "days";
+        private const string HoursSerializationName = "hours";
+        private const string MinutesSerializationName = "minutes";
+        private const string SecondsSerializationName = "seconds";
+        private const string MillisecondsSerializationName = "milliseconds";
+        private const string TicksSerializationName = "ticks";
+
+        /// <summary>
+        /// Private constructor only present for serialization.
+        /// </summary>
+        /// <param name="info">The <see cref="SerializationInfo"/> to fetch data from.</param>
+        /// <param name="context">The source for this deserialization.</param>
+        private Period(SerializationInfo info, StreamingContext context)
+            : this(info.GetInt64(YearsSerializationName),
+                   info.GetInt64(MonthsSerializationName),
+                   info.GetInt64(WeeksSerializationName),
+                   info.GetInt64(DaysSerializationName),
+                   info.GetInt64(HoursSerializationName),
+                   info.GetInt64(MinutesSerializationName),
+                   info.GetInt64(SecondsSerializationName),
+                   info.GetInt64(MillisecondsSerializationName),
+                   info.GetInt64(TicksSerializationName))
+        {
+        }
+
+        /// <summary>
+        /// Implementation of <see cref="ISerializable.GetObjectData"/>.
+        /// </summary>
+        /// <param name="info">The <see cref="SerializationInfo"/> to populate with data.</param>
+        /// <param name="context">The destination for this serialization.</param>
+        [System.Security.SecurityCritical]
+        void ISerializable.GetObjectData(SerializationInfo info, StreamingContext context)
+        {
+            info.AddValue(YearsSerializationName, years);
+            info.AddValue(MonthsSerializationName, months);
+            info.AddValue(WeeksSerializationName, weeks);
+            info.AddValue(DaysSerializationName, days);
+            info.AddValue(HoursSerializationName, hours);
+            info.AddValue(MinutesSerializationName, minutes);
+            info.AddValue(SecondsSerializationName, seconds);
+            info.AddValue(MillisecondsSerializationName, milliseconds);
+            info.AddValue(TicksSerializationName, ticks);
+        }
+        #endregion
+#endif
+
 
         /// <summary>
         /// Equality comparer which simply normalizes periods before comparing them.
         /// </summary>
-        private sealed class NormalizingPeriodEqualityComparer : EqualityComparer<Period?>
+        private sealed class NormalizingPeriodEqualityComparer : EqualityComparer<Period>
         {
             internal static readonly NormalizingPeriodEqualityComparer Instance = new NormalizingPeriodEqualityComparer();
 
@@ -954,24 +912,26 @@ namespace NodaTime
             {
             }
 
-            public override bool Equals(Period? x, Period? y)
+            public override bool Equals(Period x, Period y)
             {
                 if (ReferenceEquals(x, y))
                 {
                     return true;
                 }
-                if (x is null || y is null)
+                if (ReferenceEquals(x, null) || ReferenceEquals(y, null))
                 {
                     return false;
                 }
                 return x.Normalize().Equals(y.Normalize());
             }
 
-            public override int GetHashCode(Period? obj) =>
-                Preconditions.CheckNotNull(obj!, nameof(obj)).Normalize().GetHashCode();
+            public override int GetHashCode(Period obj)
+            {
+                return Preconditions.CheckNotNull(obj, "obj").Normalize().GetHashCode();
+            }
         }
 
-        private sealed class PeriodComparer : Comparer<Period?>
+        private sealed class PeriodComparer : Comparer<Period>
         {
             private readonly LocalDateTime baseDateTime;
 
@@ -980,17 +940,17 @@ namespace NodaTime
                 this.baseDateTime = baseDateTime;
             }
 
-            public override int Compare(Period? x, Period? y)
+            public override int Compare(Period x, Period y)
             {
                 if (ReferenceEquals(x, y))
                 {
                     return 0;
                 }
-                if (x is null)
+                if (x == null)
                 {
                     return -1;
                 }
-                if (y is null)
+                if (y == null)
                 {
                     return 1;
                 }

@@ -15,52 +15,53 @@ namespace NodaTime.TimeZones
     internal sealed class PartialZoneIntervalMap
     {
         private readonly IZoneIntervalMap map;
+        private readonly Instant start;
+        private readonly Instant end;
 
         /// <summary>
         /// Start of the interval during which this map is valid.
         /// </summary>
-        internal Instant Start { get; }
+        internal Instant Start { get { return start; } }
 
         /// <summary>
         /// End (exclusive) of the interval during which this map is valid.
         /// </summary>
-        internal Instant End { get; }
+        internal Instant End { get { return end; } }
 
         internal PartialZoneIntervalMap(Instant start, Instant end, IZoneIntervalMap map)
         {
-            // Allowing empty maps makes life simpler.
-            Preconditions.DebugCheckArgument(start <= end, nameof(end),
-                "Invalid start/end combination: {0} - {1}", start, end);
-            this.Start = start;
-            this.End = end;
+            this.start = start;
+            this.end = end;
             this.map = map;
         }
 
         /// <summary>
         /// Builds a PartialZoneIntervalMap for a single zone interval with the given name, start, end, wall offset and daylight savings.
         /// </summary>
-        internal static PartialZoneIntervalMap ForZoneInterval(string name, Instant start, Instant end, Offset wallOffset, Offset savings) =>
-            ForZoneInterval(new ZoneInterval(name, start, end, wallOffset, savings));
+        internal static PartialZoneIntervalMap ForZoneInterval(string name, Instant start, Instant end, Offset wallOffset, Offset savings)
+        {
+            return ForZoneInterval(new ZoneInterval(name, start, end, wallOffset, savings));
+        }
 
         /// <summary>
         /// Builds a PartialZoneIntervalMap wrapping the given zone interval, taking its start and end as the start and end of
         /// the portion of the time line handled by the partial map.
         /// </summary>
-        internal static PartialZoneIntervalMap ForZoneInterval(ZoneInterval interval) =>
-            new PartialZoneIntervalMap(interval.RawStart, interval.RawEnd, new SingleZoneIntervalMap(interval));
+        internal static PartialZoneIntervalMap ForZoneInterval(ZoneInterval interval)
+        {
+            return new PartialZoneIntervalMap(interval.Start, interval.End, new SingleZoneIntervalMap(interval));
+        }
 
         internal ZoneInterval GetZoneInterval(Instant instant)
         {
-            Preconditions.DebugCheckArgument(instant >= Start && instant < End, nameof(instant),
-                "Value {0} was not in the range [{0}, {1})", instant, Start, End);
             var interval = map.GetZoneInterval(instant);
             // Clamp the interval for the sake of sanity. Checking this every time isn't very efficient,
             // but we're not expecting this to be called too often, due to caching.
-            if (interval.RawStart < Start)
+            if (interval.Start < Start)
             {
                 interval = interval.WithStart(Start);
             }
-            if (interval.RawEnd > End)
+            if (interval.End > End)
             {
                 interval = interval.WithEnd(End);
             }
@@ -70,7 +71,7 @@ namespace NodaTime.TimeZones
         /// <summary>
         /// Returns true if this map only contains a single interval; that is, if the first interval includes the end of the map.
         /// </summary>
-        private bool IsSingleInterval => map.GetZoneInterval(Start).RawEnd >= End;
+        private bool IsSingleInterval { get { return map.GetZoneInterval(Start).End >= End; } }
 
         /// <summary>
         /// Returns a partial zone interval map equivalent to this one, but with the given start point.
@@ -98,19 +99,12 @@ namespace NodaTime.TimeZones
         internal static IZoneIntervalMap ConvertToFullMap(IEnumerable<PartialZoneIntervalMap> maps)
         {
             var coalescedMaps = new List<PartialZoneIntervalMap>();
-            PartialZoneIntervalMap? current = null;
+            PartialZoneIntervalMap current = null;
             foreach (var next in maps)
             {
-                if (current is null)
+                if (current == null)
                 {
                     current = next;
-                    Preconditions.DebugCheckArgument(current.Start == Instant.BeforeMinValue, nameof(maps), "First partial map must start at the beginning of time");
-                    continue;
-                }
-                Preconditions.DebugCheckArgument(current.End == next.Start, nameof(maps), "Maps must abut");
-
-                if (next.Start == next.End)
-                {
                     continue;
                 }
 
@@ -158,11 +152,8 @@ namespace NodaTime.TimeZones
                     }
                 }
             }
-            Preconditions.DebugCheckArgument(current != null, nameof(maps), "Collection of maps must not be empty");
-            Preconditions.DebugCheckArgument(current!.End == Instant.AfterMaxValue, nameof(maps), "Collection of maps must end at the end of time");
-
             // We're left with a map extending to the end of time, which couldn't have been coalesced with its predecessors.
-            coalescedMaps.Add(current!);
+            coalescedMaps.Add(current);
             return new CombinedPartialZoneIntervalMap(coalescedMaps.ToArray());
         }
 

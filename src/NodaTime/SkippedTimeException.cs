@@ -2,16 +2,8 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using NodaTime.Annotations;
-using NodaTime.Utility;
 using System;
-
-// Standard exception constructors: we don't *want* those constructors.
-// The single constructor provided in this class populates the message and
-// accepts the required parameters for populating other properties.
-// There are never any other causes to the exception, at least that I can
-// envisage for the moment.
-#pragma warning disable CA1032
+using NodaTime.Annotations;
 
 namespace NodaTime
 {
@@ -40,20 +32,24 @@ namespace NodaTime
     /// <threadsafety>Any public static members of this type are thread safe. Any instance members are not guaranteed to be thread safe.
     /// See the thread safety section of the user guide for more information.
     /// </threadsafety>
+#if !PCL
+    [Serializable]
+#endif
     [Mutable] // Exception itself is mutable
     public sealed class SkippedTimeException : ArgumentOutOfRangeException
     {
-        /// <summary>
-        /// Gets the local date/time which is invalid in the time zone, prompting this exception.
-        /// </summary>
-        /// <value>The local date/time which is invalid in the time zone.</value>
-        public LocalDateTime LocalDateTime { get; }
+        private readonly LocalDateTime localDateTime;
+        private readonly DateTimeZone zone;
 
         /// <summary>
-        /// Gets the time zone in which the local date/time is invalid.
+        /// The local date/time which is invalid in the time zone
         /// </summary>
-        /// <value>The time zone in which the local date/time is invalid</value>
-        public DateTimeZone Zone { get; }
+        public LocalDateTime LocalDateTime { get { return localDateTime; } }
+
+        /// <summary>
+        /// The time zone in which the local date/time is invalid
+        /// </summary>
+        public DateTimeZone Zone { get { return zone; } }
 
         /// <summary>
         /// Creates a new instance for the given local date/time and time zone.
@@ -65,10 +61,10 @@ namespace NodaTime
         /// <param name="localDateTime">The local date/time which is skipped in the specified time zone.</param>
         /// <param name="zone">The time zone in which the local date/time does not exist.</param>
         public SkippedTimeException(LocalDateTime localDateTime, DateTimeZone zone)
-            : base($"Local time {localDateTime} is invalid in time zone {Preconditions.CheckNotNull(zone, nameof(zone)).Id}")
+            : base("Local time " + localDateTime + " is invalid in time zone " + zone.Id)
         {
-            this.LocalDateTime = localDateTime;
-            this.Zone = zone;
+            this.localDateTime = localDateTime;
+            this.zone = zone;
         }
     }
 }

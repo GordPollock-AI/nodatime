@@ -2,7 +2,6 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using NodaTime.Annotations;
 using System;
 
 namespace NodaTime.Calendars
@@ -12,7 +11,6 @@ namespace NodaTime.Calendars
     /// <list type="bullet">
     /// <item>A fixed number of months</item>
     /// <item>Occasional leap years which are always 1 day longer than non-leap years</item>
-    /// <item>The year starting with month 1, day 1 (i.e. naive YearMonthDay comparisons work)</item>
     /// </list>
     /// </summary>
     internal abstract class RegularYearMonthDayCalculator : YearMonthDayCalculator
@@ -20,37 +18,28 @@ namespace NodaTime.Calendars
         private readonly int monthsInYear;
 
         protected RegularYearMonthDayCalculator(int minYear, int maxYear, int monthsInYear,
-            int averageDaysPer10Years, int daysAtStartOfYear1)
-            : base(minYear, maxYear, averageDaysPer10Years, daysAtStartOfYear1)
+            long averageTicksPerYear, long ticksAtStartOfYear1, params Era[] eras)
+            : base(minYear, maxYear, averageTicksPerYear, ticksAtStartOfYear1, eras)
         {
             this.monthsInYear = monthsInYear;
         }
 
-        internal override int GetMonthsInYear([Trusted] int year) => monthsInYear;
-
-        /// <summary>
-        /// Implements a simple year-setting policy, truncating the day
-        /// if necessary.
-        /// </summary>
-        internal override YearMonthDay SetYear(YearMonthDay yearMonthDay, [Trusted] int year)
+        internal override int GetMaxMonth(int year)
         {
-            // If this ever becomes a bottleneck due to GetDaysInMonth, it can be overridden
-            // in subclasses.
-            int currentMonth = yearMonthDay.Month;
-            int currentDay = yearMonthDay.Day;
-            int newDay = GetDaysInMonth(year, currentMonth);
-            return new YearMonthDay(year, currentMonth, Math.Min(currentDay, newDay));
+            return monthsInYear;
         }
 
-        internal override YearMonthDay AddMonths(YearMonthDay yearMonthDay, int months)
+        override internal LocalInstant AddMonths(LocalInstant localInstant, int months)
         {
             if (months == 0)
             {
-                return yearMonthDay;
+                return localInstant;
             }
+            // Save the time part first
+            long timePart = TimeOfDayCalculator.GetTickOfDay(localInstant);
             // Get the year and month
-            int thisYear = yearMonthDay.Year;
-            int thisMonth = yearMonthDay.Month;
+            int thisYear = GetYear(localInstant);
+            int thisMonth = GetMonthOfYear(localInstant, thisYear);
 
             // Do not refactor without careful consideration.
             // Order of calculation is important.
@@ -83,41 +72,38 @@ namespace NodaTime.Calendars
             // End of do not refactor.
 
             // Quietly force DOM to nearest sane value.
-            int dayToUse = yearMonthDay.Day;
+            int dayToUse = GetDayOfMonth(localInstant, thisYear, thisMonth);
             int maxDay = GetDaysInMonth(yearToUse, monthToUse);
             dayToUse = Math.Min(dayToUse, maxDay);
-            if (yearToUse < MinYear || yearToUse > MaxYear)
-            {
-                throw new OverflowException("Date computation would overflow calendar bounds.");
-            }
-            return new YearMonthDay(yearToUse, monthToUse, dayToUse);
+            // Get proper date part, and return result
+            long datePart = GetYearMonthDayTicks(yearToUse, monthToUse, dayToUse);
+            return new LocalInstant(datePart + timePart);
         }
 
-        internal override int MonthsBetween(YearMonthDay start, YearMonthDay end)
+        internal override int MonthsBetween(LocalInstant minuendInstant, LocalInstant subtrahendInstant)
         {
-            int startMonth = start.Month;
-            int startYear = start.Year;
-            int endMonth = end.Month;
-            int endYear = end.Year;
+            int minuendYear = GetYear(minuendInstant);
+            int subtrahendYear = GetYear(subtrahendInstant);
+            int minuendMonth = GetMonthOfYear(minuendInstant);
+            int subtrahendMonth = GetMonthOfYear(subtrahendInstant);
 
-            int diff = (endYear - startYear) * monthsInYear + endMonth - startMonth;
+            int diff = (minuendYear - subtrahendYear) * monthsInYear + minuendMonth - subtrahendMonth;
 
-            // If we just add the difference in months to start, what do we get?
-            YearMonthDay simpleAddition = AddMonths(start, diff);
+            // If we just add the difference in months to subtrahendInstant, what do we get?
+            LocalInstant simpleAddition = AddMonths(subtrahendInstant, diff);
 
-            // Note: this relies on naive comparison of year/month/date values.
-            if (start <= end)
+            if (subtrahendInstant <= minuendInstant)
             {
-                // Moving forward: if the result of the simple addition is before or equal to the end,
+                // Moving forward: if the result of the simple addition is before or equal to the minuend,
                 // we're done. Otherwise, rewind a month because we've overshot.
-                return simpleAddition <= end ? diff : diff - 1;
+                return simpleAddition <= minuendInstant ? diff : diff - 1;
             }
             else
             {
                 // Moving backward: if the result of the simple addition (of a non-positive number)
-                // is after or equal to the end, we're done. Otherwise, increment by a month because
+                // is after or equal to the minuend, we're done. Otherwise, increment by a month because
                 // we've overshot backwards.
-                return simpleAddition >= end ? diff : diff + 1;
+                return simpleAddition >= minuendInstant ? diff : diff + 1;
             }
         }
     }

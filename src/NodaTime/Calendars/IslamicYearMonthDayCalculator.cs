@@ -17,8 +17,8 @@ namespace NodaTime.Calendars
         /// <summary>The length of a short month, in days.</summary>
         private const int ShortMonthLength = 29;
 
-        /// <summary>The typical number of days in 10 years.</summary>
-        private const int AverageDaysPer10Years = 3544; // Ideally 354.36667 per year
+        /// <summary>The typical number of ticks in a year.</summary>
+        private const long AverageTicksPerYear = (long) (354.36667 * NodaConstants.TicksPerStandardDay);
 
         /// <summary>The number of days in a non-leap year.</summary>
         private const int DaysPerNonLeapYear = 354;
@@ -26,11 +26,14 @@ namespace NodaTime.Calendars
         /// <summary>The number of days in a leap year.</summary>
         private const int DaysPerLeapYear = 355;
 
-        /// <summary>The days for the civil (Friday) epoch of July 16th 622CE.</summary>
-        private const int DaysAtCivilEpoch = -492148;
+        /// <summary>The number of ticks in a non-leap year.</summary>
+        private const long TicksPerNonLeapYear = DaysPerNonLeapYear * NodaConstants.TicksPerStandardDay;
 
-        /// <summary>The days for the civil (Thursday) epoch of July 15th 622CE.</summary>
-        private const int DaysAtAstronomicalEpoch = DaysAtCivilEpoch - 1;
+        /// <summary>The ticks for the civil (Friday) epoch of July 16th 622CE.</summary>
+        private const long TicksAtCivilEpoch = -425215872000000000L;
+
+        /// <summary>The ticks for the civil (Thursday) epoch of July 15th 622CE.</summary>
+        private const long TicksAtAstronomicalEpoch = TicksAtCivilEpoch - NodaConstants.TicksPerStandardDay;
 
         /// <summary>The length of the cycle of leap years.</summary>
         private const int LeapYearCycleLength = 30;
@@ -41,52 +44,63 @@ namespace NodaTime.Calendars
         /// <summary>The pattern of leap years within a cycle, one bit per year, for this calendar.</summary>
         private readonly int leapYearPatternBits;
 
-        /// <summary>The number of days preceding the 1-indexed month - so [0, 0, 30, 59, ...]</summary>
-        private static readonly int[] TotalDaysByMonth = GenerateTotalDaysByMonth();
+        private readonly int daysAtStartOfYear1;
 
-        private static int[] GenerateTotalDaysByMonth()
+        private static readonly long[] TotalTicksByMonth;
+
+        static IslamicYearMonthDayCalculator()
         {
-            int days = 0;
-            int[] ret = new int[13];
-            for (int i = 1; i <= 12; i++)
+            long ticks = 0;
+            TotalTicksByMonth = new long[12];
+            for (int i = 0; i < 12; i++)
             {
-                ret[i] = days;
-                // Here, the month number is 1-based, so odd months are long
-                int daysInMonth = (i & 1) == 1 ? LongMonthLength : ShortMonthLength;
+                TotalTicksByMonth[i] = ticks;
+                // Here, the month number is 0-based, so even months are long
+                int days = (i & 1) == 0 ? LongMonthLength : ShortMonthLength;
                 // This doesn't take account of leap years, but that doesn't matter - because
                 // it's not used on the last iteration, and leap years only affect the final month
                 // in the Islamic calendar.
-                days += daysInMonth;
+                ticks += days * NodaConstants.TicksPerStandardDay;
             }
-            return ret;
         }
 
         internal IslamicYearMonthDayCalculator(IslamicLeapYearPattern leapYearPattern, IslamicEpoch epoch)
-            : base(1, 9665, 12, AverageDaysPer10Years, GetYear1Days(epoch))
+            : base(1, 31513, 12, AverageTicksPerYear, GetYear1Ticks(epoch), Era.AnnoHegirae)
         {
+            this.daysAtStartOfYear1 = (int) (TicksAtStartOfYear1 / NodaConstants.TicksPerStandardDay);
             this.leapYearPatternBits = GetLeapYearPatternBits(leapYearPattern);
         }
 
-        // The number of days at the *start* of a month isn't affected by
-        // the year as the only month length which varies by year is the last one.
-        protected override int GetDaysFromStartOfYearToStartOfMonth(int year, int month) => TotalDaysByMonth[month];
-
-        internal override YearMonthDay GetYearMonthDay(int year, int dayOfYear)
+        internal override LocalInstant SetYear(LocalInstant localInstant, int year)
         {
-            int month, day;
-            // Special case the last day in a leap year
+            // Optimized implementation of SetYear, due to fixed months.
+            int thisYear = GetYear(localInstant);
+            int dayOfYear = GetDayOfYear(localInstant, thisYear);
+            // Truncate final day of leap year.
+            if (dayOfYear == DaysPerLeapYear && !IsLeapYear(year))
+            {
+                dayOfYear--;
+            }
+            long tickOfDay = TimeOfDayCalculator.GetTickOfDay(localInstant);
+
+            return new LocalInstant(GetStartOfYearInTicks(year) + ((dayOfYear - 1) * NodaConstants.TicksPerStandardDay) + tickOfDay);
+        }
+
+        protected override long GetTicksFromStartOfYearToStartOfMonth(int year, int month)
+        {
+            // The number of ticks at the *start* of a month isn't affected by
+            // the year as the only month length which varies by year is the last one.
+            return TotalTicksByMonth[month - 1];
+        }
+
+        internal override int GetDayOfMonth(LocalInstant localInstant)
+        {
+            int dayOfYear = GetDayOfYear(localInstant);
             if (dayOfYear == DaysPerLeapYear)
             {
-                month = 12;
-                day = 30;
+                return 30;
             }
-            else
-            {
-                int dayOfYearZeroBased = dayOfYear - 1;
-                month = ((dayOfYearZeroBased * 2) / MonthPairLength) + 1;
-                day = ((dayOfYearZeroBased % MonthPairLength) % LongMonthLength) + 1;
-            }
-            return new YearMonthDay(year, month, day);
+            return ((dayOfYear - 1) % MonthPairLength) % LongMonthLength + 1; 
         }
 
         internal override bool IsLeapYear(int year)
@@ -98,7 +112,17 @@ namespace NodaTime.Calendars
             return (leapYearPatternBits & key) > 0;
         }
 
-        internal override int GetDaysInYear(int year) => IsLeapYear(year) ? DaysPerLeapYear : DaysPerNonLeapYear;
+        internal override int GetDaysInYear(int year)
+        {
+            return IsLeapYear(year) ? DaysPerLeapYear : DaysPerNonLeapYear;
+        }
+
+        protected override long GetTicksInYear(int year)
+        {
+            return IsLeapYear(year)
+                ? DaysPerLeapYear * NodaConstants.TicksPerStandardDay
+                : DaysPerNonLeapYear * NodaConstants.TicksPerStandardDay;
+        }
 
         internal override int GetDaysInMonth(int year, int month)
         {
@@ -110,6 +134,16 @@ namespace NodaTime.Calendars
             return (month & 1) == 0 ? ShortMonthLength : LongMonthLength;
         }
 
+        protected override int GetMonthOfYear(LocalInstant localInstant, int year)
+        {
+            int dayOfYearZeroBased = (int)((localInstant.Ticks - GetStartOfYearInTicks(year)) / NodaConstants.TicksPerStandardDay);
+            if (dayOfYearZeroBased == DaysPerLeapYear - 1)
+            {
+                return 12;
+            }
+            return ((dayOfYearZeroBased * 2) / MonthPairLength) + 1;
+        }
+
         protected override int CalculateStartOfYearDays(int year)
         {
             // The first cycle starts in year 1, not year 0.
@@ -118,7 +152,7 @@ namespace NodaTime.Calendars
                                  : (year - LeapYearCycleLength) / LeapYearCycleLength;
             int yearAtStartOfCycle = (cycle * LeapYearCycleLength) + 1;
 
-            int days = DaysAtStartOfYear1 + cycle * DaysPerLeapCycle;
+            int days = daysAtStartOfYear1 + cycle * DaysPerLeapCycle;
 
             // We've got the days at the start of the cycle (e.g. at the start of year 1, 31, 61 etc).
             // Now go from that year to (but not including) the year we're looking for, adding the right
@@ -139,25 +173,31 @@ namespace NodaTime.Calendars
         /// Note that although cycle years are usually numbered 1-30, the bit pattern is for 0-29; cycle year
         /// 30 is represented by bit 0.
         /// </summary>
-        private static int GetLeapYearPatternBits(IslamicLeapYearPattern leapYearPattern) => leapYearPattern switch
+        private static int GetLeapYearPatternBits(IslamicLeapYearPattern leapYearPattern)
         {
-            // When reading bit patterns, don't forget to read right to left...
-            IslamicLeapYearPattern.Base15 => 623158436,        // 0b100101001001001010010010100100
-            IslamicLeapYearPattern.Base16 => 623191204,        // 0b100101001001010010010010100100
-            IslamicLeapYearPattern.Indian => 690562340,        // 0b101001001010010010010100100100
-            IslamicLeapYearPattern.HabashAlHasib => 153692453, // 0b001001001010010010100100100101
-            _ => throw new ArgumentOutOfRangeException(nameof(leapYearPattern))
-        };
+            switch (leapYearPattern)
+            {
+                // When reading bit patterns, don't forget to read right to left...
+                case IslamicLeapYearPattern.Base15:        return 623158436; // 0b100101001001001010010010100100
+                case IslamicLeapYearPattern.Base16:        return 623191204; // 0b100101001001010010010010100100
+                case IslamicLeapYearPattern.Indian:        return 690562340; // 0b101001001010010010010100100100
+                case IslamicLeapYearPattern.HabashAlHasib: return 153692453; // 0b001001001010010010100100100101
+                default: throw new ArgumentOutOfRangeException("leapYearPattern");
+            }
+        }
 
         /// <summary>
-        /// Returns the days since the Unix epoch at the specified epoch.
+        /// Returns the LocalInstant ticks at the specified epoch.
         /// </summary>
-        private static int GetYear1Days(IslamicEpoch epoch) => epoch switch
+        private static long GetYear1Ticks(IslamicEpoch epoch)
         {
-            // Epoch 1970-01-01 ISO = 1389-10-22 Islamic (civil) or 1389-10-23 Islamic (astronomical)
-            IslamicEpoch.Astronomical => DaysAtAstronomicalEpoch,
-            IslamicEpoch.Civil => DaysAtCivilEpoch,
-            _ => throw new ArgumentOutOfRangeException(nameof(epoch))
-        };
+            switch (epoch)
+            {
+                // Epoch 1970-01-01 ISO = 1389-10-22 Islamic (civil) or 1389-10-23 Islamic (astronomical)
+                case IslamicEpoch.Astronomical: return TicksAtAstronomicalEpoch;
+                case IslamicEpoch.Civil:        return TicksAtCivilEpoch;
+                default: throw new ArgumentOutOfRangeException("epoch");
+            }
+        }
     }
 }

@@ -2,19 +2,15 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using NodaTime.Annotations;
-using NodaTime.Calendars;
-using NodaTime.Utility;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
-using static System.FormattableString;
-
-// Remove static constructors.
-// The calendar system initialization here can be slow or increase memory usage,
-// so the static constructors are very deliberately present to make them truly lazy.
-#pragma warning disable CA1810
+using System.Collections.ObjectModel;
+using System.Globalization;
+using JetBrains.Annotations;
+using NodaTime.Annotations;
+using NodaTime.Calendars;
+using NodaTime.Fields;
+using NodaTime.Utility;
 
 namespace NodaTime
 {
@@ -30,7 +26,7 @@ namespace NodaTime
     /// </para>
     /// <para>
     /// If you need to obtain a <see cref="CalendarSystem" /> instance, use one of the static properties or methods in this
-    /// class, such as the <see cref="Iso" /> property or the <see cref="GetHebrewCalendar(HebrewMonthNumbering)" /> method.
+    /// class, such as the <see cref="Iso" /> property or the <see cref="GetGregorianCalendar(int)" /> method.
     /// </para>
     /// <para>Although this class is currently sealed (as of Noda Time 1.2), in the future this decision may
     /// be reversed. In any case, there is no current intention for third-party developers to be able to implement
@@ -45,132 +41,123 @@ namespace NodaTime
     [Immutable]
     public sealed class CalendarSystem
     {
-        // IDs and names are separated out (usually with the ID either being the same as the name,
-        // or the base ID being the same as a name and then other IDs being formed from it.) The
-        // differentiation is only present for clarity.
+        // TODO(2.0): Consider moving the static accessors into a separate class. As we get more calendars,
+        // this approach will become unwieldy.
+
+        #region Public factory members for calendars
         private const string GregorianName = "Gregorian";
-        private const string GregorianId = GregorianName;
-
         private const string IsoName = "ISO";
-        private const string IsoId = IsoName;
-
         private const string CopticName = "Coptic";
-        private const string CopticId = CopticName;
-
-        private const string BadiName = "Badi";
-        private const string BadiId = BadiName;
-
         private const string JulianName = "Julian";
-        private const string JulianId = JulianName;
-
         private const string IslamicName = "Hijri";
-        private const string IslamicIdBase = IslamicName;
-        // Not part of IslamicCalendars as we want to be able to call it without triggering type initialization.
-        internal static string GetIslamicId(IslamicLeapYearPattern leapYearPattern, IslamicEpoch epoch)
-        {
-            return Invariant($"{IslamicIdBase} {epoch}-{leapYearPattern}");
-        }
-
         private const string PersianName = "Persian";
-        private const string PersianIdBase = PersianName;
-        private const string PersianSimpleId = PersianIdBase + " Simple";
-        private const string PersianAstronomicalId = PersianIdBase + " Algorithmic";
-        private const string PersianArithmeticId = PersianIdBase + " Arithmetic";
-
         private const string HebrewName = "Hebrew";
-        private const string HebrewIdBase = HebrewName;
-        private const string HebrewCivilId = HebrewIdBase + " Civil";
-        private const string HebrewScripturalId = HebrewIdBase + " Scriptural";
 
-        private const string UmAlQuraName = "Um Al Qura";
-        private const string UmAlQuraId = UmAlQuraName;
-
-        // While we could implement some of these as auto-props, it probably adds more confusion than convenience.
-        private static readonly CalendarSystem[] CalendarByOrdinal = new CalendarSystem[(int) CalendarOrdinal.Size];
+        private static readonly CalendarSystem[] GregorianCalendarSystems;
+        private static readonly CalendarSystem[] CopticCalendarSystems;
+        private static readonly CalendarSystem[] JulianCalendarSystems;
+        private static readonly CalendarSystem[,] IslamicCalendarSystems;
+        private static readonly CalendarSystem IsoCalendarSystem;
+        private static readonly CalendarSystem PersianCalendarSystem;
+        private static readonly CalendarSystem[] HebrewCalendarSystems;
 
         static CalendarSystem()
         {
-            var gregorianCalculator = new GregorianYearMonthDayCalculator();
-            var gregorianEraCalculator = new GJEraCalculator(gregorianCalculator);
-            Iso = new CalendarSystem(CalendarOrdinal.Iso, IsoId, IsoName, gregorianCalculator, gregorianEraCalculator);
+            IsoCalendarSystem = new CalendarSystem(IsoName, IsoName, new IsoYearMonthDayCalculator(), 4);
+            PersianCalendarSystem = new CalendarSystem(PersianName, PersianName, new PersianYearMonthDayCalculator(), 4);
+            HebrewCalendarSystems = new[]
+            {
+                new CalendarSystem(HebrewName, HebrewName, new HebrewYearMonthDayCalculator(HebrewMonthNumbering.Civil), 4),
+                new CalendarSystem(HebrewName, HebrewName, new HebrewYearMonthDayCalculator(HebrewMonthNumbering.Scriptural), 4)
+            };
+
+            // Variations for the calendar systems which have different objects for different "minimum first day of week"
+            // values. We create a new year/month/day calculator for each instance, but there's no actual state - it's
+            // unimportant. Later we could save a whole 18 objects by avoiding that...
+            GregorianCalendarSystems = new CalendarSystem[7];
+            CopticCalendarSystems = new CalendarSystem[7];
+            JulianCalendarSystems = new CalendarSystem[7];
+            for (int i = 1; i <= 7; i++)
+            {
+                GregorianCalendarSystems[i - 1] = new CalendarSystem(GregorianName, new GregorianYearMonthDayCalculator(), i);
+                CopticCalendarSystems[i - 1] = new CalendarSystem(CopticName, new CopticYearMonthDayCalculator(), i);
+                JulianCalendarSystems[i - 1] = new CalendarSystem(JulianName, new JulianYearMonthDayCalculator(), i);
+            }
+            IslamicCalendarSystems = new CalendarSystem[4, 2];
+            for (int i = 1; i <= 4; i++)
+            {
+                for (int j = 1; j <= 2; j++)
+                {
+                    var leapYearPattern = (IslamicLeapYearPattern)i;
+                    var epoch = (IslamicEpoch)j;
+                    var calculator = new IslamicYearMonthDayCalculator((IslamicLeapYearPattern)i, (IslamicEpoch)j);
+                    string id = string.Format(CultureInfo.InvariantCulture, "{0} {1}-{2}", IslamicName, epoch, leapYearPattern);
+                    IslamicCalendarSystems[i - 1, j - 1] = new CalendarSystem(id, IslamicName, calculator, 4);
+                }
+            }
         }
 
-        #region Public factory members for calendars
         /// <summary>
         /// Fetches a calendar system by its unique identifier. This provides full round-tripping of a calendar
-        /// system. This method will always return the same reference for the same ID.
+        /// system. It is not guaranteed that calling this method twice with the same identifier will return
+        /// identical references, but the references objects will be equal.
         /// </summary>
         /// <param name="id">The ID of the calendar system. This is case-sensitive.</param>
         /// <returns>The calendar system with the given ID.</returns>
         /// <seealso cref="Id"/>
         /// <exception cref="KeyNotFoundException">No calendar system for the specified ID can be found.</exception>
-        /// <exception cref="NotSupportedException">The calendar system with the specified ID is known, but not supported on this platform.</exception>
         public static CalendarSystem ForId(string id)
         {
-            Preconditions.CheckNotNull(id, nameof(id));
-            if (!IdToFactoryMap.TryGetValue(id, out Func<CalendarSystem> factory))
+            Func<CalendarSystem> factory;
+            if (!IdToFactoryMap.TryGetValue(id, out factory))
             {
-                throw new KeyNotFoundException($"No calendar system for ID {id} exists");
+                throw new KeyNotFoundException(string.Format("No calendar system for ID {0} exists", id));
             }
             return factory();
         }
 
         /// <summary>
-        /// Fetches a calendar system by its ordinal value, constructing it if necessary.
-        /// </summary>
-        internal static CalendarSystem ForOrdinal([Trusted] CalendarOrdinal ordinal)
-        {
-            Preconditions.DebugCheckArgument(ordinal >= 0 && ordinal < CalendarOrdinal.Size, nameof(ordinal),
-                "Unknown ordinal value {0}", ordinal);
-            // Avoid an array lookup for the overwhelmingly common case.
-            if (ordinal == CalendarOrdinal.Iso)
-            {
-                return Iso;
-            }
-            CalendarSystem calendar = CalendarByOrdinal[(int) ordinal];
-            if (calendar != null)
-            {
-                return calendar;
-            }
-            // Not found it in the array. This can happen if the calendar system was initialized in
-            // a different thread, and the write to the array isn't visible in this thread yet.
-            // A simple switch will do the right thing. This is separated out (directly below) to allow
-            // it to be tested separately. (It may also help this method be inlined...) The return
-            // statement below is unlikely to ever be hit by code coverage, as it's handling a very
-            // unusual and hard-to-provoke situation.
-            return ForOrdinalUncached(ordinal);
-        }
-
-        /// <summary>
         /// Returns the IDs of all calendar systems available within Noda Time. The order of the keys is not guaranteed.
         /// </summary>
-        /// <value>The IDs of all calendar systems available within Noda Time.</value>
-        public static IEnumerable<string> Ids => IdToFactoryMap.Keys;
+        public static IEnumerable<string> Ids { get { return IdToFactoryMap.Keys; } }
 
-        // Note: each factory method must return the same reference on every invocation.
-        // If the delegate calls a method, that method must have the same guarantee.
         private static readonly Dictionary<string, Func<CalendarSystem>> IdToFactoryMap = new Dictionary<string, Func<CalendarSystem>>
         {
-            // The compiler doesn't know that nothing will execute the delegate before we assign a value to Iso.
-            {IsoId, () => Iso!},
-            {PersianSimpleId, () => PersianSimple},
-            {PersianArithmeticId, () => PersianArithmetic},
-            {PersianAstronomicalId, () => PersianAstronomical},
-            {HebrewCivilId, () => GetHebrewCalendar(HebrewMonthNumbering.Civil)},
-            {HebrewScripturalId, () => GetHebrewCalendar(HebrewMonthNumbering.Scriptural)},
-            {GregorianId, () => Gregorian},
-            {CopticId, () => Coptic},
-            {BadiId, () => Badi},
-            {JulianId, () => Julian},
-            {UmAlQuraId, () => UmAlQura},
-            {GetIslamicId(IslamicLeapYearPattern.Indian, IslamicEpoch.Civil), () => GetIslamicCalendar(IslamicLeapYearPattern.Indian, IslamicEpoch.Civil)},
-            {GetIslamicId(IslamicLeapYearPattern.Base15, IslamicEpoch.Civil), () => GetIslamicCalendar(IslamicLeapYearPattern.Base15, IslamicEpoch.Civil)},
-            {GetIslamicId(IslamicLeapYearPattern.Base16, IslamicEpoch.Civil), () => GetIslamicCalendar(IslamicLeapYearPattern.Base16, IslamicEpoch.Civil)},
-            {GetIslamicId(IslamicLeapYearPattern.HabashAlHasib, IslamicEpoch.Civil), () => GetIslamicCalendar(IslamicLeapYearPattern.HabashAlHasib, IslamicEpoch.Civil)},
-            {GetIslamicId(IslamicLeapYearPattern.Indian, IslamicEpoch.Astronomical), () => GetIslamicCalendar(IslamicLeapYearPattern.Indian, IslamicEpoch.Astronomical)},
-            {GetIslamicId(IslamicLeapYearPattern.Base15, IslamicEpoch.Astronomical), () => GetIslamicCalendar(IslamicLeapYearPattern.Base15, IslamicEpoch.Astronomical)},
-            {GetIslamicId(IslamicLeapYearPattern.Base16, IslamicEpoch.Astronomical), () => GetIslamicCalendar(IslamicLeapYearPattern.Base16, IslamicEpoch.Astronomical)},
-            {GetIslamicId(IslamicLeapYearPattern.HabashAlHasib, IslamicEpoch.Astronomical), () => GetIslamicCalendar(IslamicLeapYearPattern.HabashAlHasib, IslamicEpoch.Astronomical)},
+            { "ISO", () => Iso },
+#pragma warning disable 1062
+            { "Persian", GetPersianCalendar },
+#pragma warning restore 1062
+            { "Hebrew-Civil", () => GetHebrewCalendar(HebrewMonthNumbering.Civil) },
+            { "Hebrew-Scriptural", () => GetHebrewCalendar(HebrewMonthNumbering.Scriptural) },
+            { "Gregorian 1", () => GetGregorianCalendar(1) },
+            { "Gregorian 2", () => GetGregorianCalendar(2) },
+            { "Gregorian 3", () => GetGregorianCalendar(3) },
+            { "Gregorian 4", () => GetGregorianCalendar(4) },
+            { "Gregorian 5", () => GetGregorianCalendar(5) },
+            { "Gregorian 6", () => GetGregorianCalendar(6) },
+            { "Gregorian 7", () => GetGregorianCalendar(7) },
+            { "Coptic 1", () => GetCopticCalendar(1) },
+            { "Coptic 2", () => GetCopticCalendar(2) },
+            { "Coptic 3", () => GetCopticCalendar(3) },
+            { "Coptic 4", () => GetCopticCalendar(4) },
+            { "Coptic 5", () => GetCopticCalendar(5) },
+            { "Coptic 6", () => GetCopticCalendar(6) },
+            { "Coptic 7", () => GetCopticCalendar(7) },
+            { "Julian 1", () => GetJulianCalendar(1) },
+            { "Julian 2", () => GetJulianCalendar(2) },
+            { "Julian 3", () => GetJulianCalendar(3) },
+            { "Julian 4", () => GetJulianCalendar(4) },
+            { "Julian 5", () => GetJulianCalendar(5) },
+            { "Julian 6", () => GetJulianCalendar(6) },
+            { "Julian 7", () => GetJulianCalendar(7) },
+            { "Hijri Civil-Indian", () => GetIslamicCalendar(IslamicLeapYearPattern.Indian, IslamicEpoch.Civil) },
+            { "Hijri Civil-Base15", () => GetIslamicCalendar(IslamicLeapYearPattern.Base15, IslamicEpoch.Civil) },
+            { "Hijri Civil-Base16", () => GetIslamicCalendar(IslamicLeapYearPattern.Base16, IslamicEpoch.Civil) },
+            { "Hijri Civil-HabashAlHasib", () => GetIslamicCalendar(IslamicLeapYearPattern.HabashAlHasib, IslamicEpoch.Civil) },
+            { "Hijri Astronomical-Indian", () => GetIslamicCalendar(IslamicLeapYearPattern.Indian, IslamicEpoch.Astronomical) },
+            { "Hijri Astronomical-Base15", () => GetIslamicCalendar(IslamicLeapYearPattern.Base15, IslamicEpoch.Astronomical) },
+            { "Hijri Astronomical-Base16", () => GetIslamicCalendar(IslamicLeapYearPattern.Base16, IslamicEpoch.Astronomical) },
+            { "Hijri Astronomical-HabashAlHasib", () => GetIslamicCalendar(IslamicLeapYearPattern.HabashAlHasib, IslamicEpoch.Astronomical) },
         };
 
         /// <summary>
@@ -178,25 +165,50 @@ namespace NodaTime
         /// which is compatible with Gregorian for all modern dates.
         /// </summary>
         /// <remarks>
-        /// As of Noda Time 2.0, this calendar system is equivalent to <see cref="Gregorian"/>.
-        /// The only areas in which the calendars differed were around centuries, and the members
-        /// relating to those differences were removed in Noda Time 2.0.
-        /// The distinction between Gregorian and ISO has been maintained for the sake of simplicity, compatibility
-        /// and consistency.
+        /// <para>
+        /// When ISO does not define a field, but it can be determined (such as AM/PM) it is included.
+        /// </para>
+        /// <para>
+        /// With the exception of century related fields, the ISO calendar is exactly the
+        /// same as the Gregorian calendar system. In the ISO system, centuries and year
+        /// of century are zero based. For all years, the century is determined by
+        /// dropping the last two digits of the year, ignoring sign. The year of century
+        /// is the value of the last two year digits.
+        /// </para>
         /// </remarks>
-        /// <value>The ISO calendar system.</value>
-        public static CalendarSystem Iso { get; }
+        public static CalendarSystem Iso { get { return IsoCalendarSystem; } }
 
         /// <summary>
-        /// Returns a Hebrew calendar, as described at https://en.wikipedia.org/wiki/Hebrew_calendar. This is a
+        /// Returns a Persian (also known as Solar Hijri) calendar system. This is the main calendar in Iran
+        /// and Afghanistan, and is also used in some other countries where Persian is spoken.
+        /// </summary>
+        /// <remarks>
+        /// The true Persian calendar is an astronomical one, where leap years depend on vernal equinox.
+        /// A complicated algorithmic alternative approach exists, proposed by Ahmad Birashk,
+        /// but this isn't generally used in society. The implementation here is somewhat simpler, using a
+        /// 33-year leap cycle, where years  1, 5, 9, 13, 17, 22, 26, and 30 in each cycle are leap years.
+        /// This is the same approach taken by the BCL <c>PersianCalendar</c> class, and the dates of
+        /// this implementation align exactly with the BCL implementation.
+        /// </remarks>
+        /// <returns>A Persian calendar system.</returns>
+        [Obsolete("Use the PersianSimple property for compatibility with 2.0.")]
+        public static CalendarSystem GetPersianCalendar()
+        {
+            // Note: this is a method rather than a property as we may wish to overload it to allow a choice
+            // of other Persian calendars in the future and for consistency.
+            return PersianCalendarSystem;
+        }
+
+        /// <summary>
+        /// Returns a Hebrew calendar, as described at http://en.wikipedia.org/wiki/Hebrew_calendar. This is a
         /// purely mathematical calculator, applied proleptically to the period where the real calendar was observational. 
         /// </summary>
         /// <remarks>
-        /// <para>Please note that support for the Hebrew calendar is somewhat experimental,
+        /// <para>Please note that in version 1.3.0 of Noda Time, support for the Hebrew calendar is somewhat experimental,
         /// particularly in terms of calculations involving adding or subtracting years. Additionally, text formatting
         /// and parsing using month names is not currently supported, due to the challenges of handling leap months.
         /// It is hoped that this will be improved in future versions.</para>
-        /// <para>The implementation for this was taken from https://www.cs.tau.ac.il/~nachum/calendar-book/papers/calendar.ps,
+        /// <para>The implementation for this was taken from http://www.cs.tau.ac.il/~nachum/calendar-book/papers/calendar.ps,
         /// which is a public domain algorithm presumably equivalent to that given in the Calendrical Calculations book
         /// by the same authors (Nachum Dershowitz and Edward Reingold).
         /// </para>
@@ -205,36 +217,92 @@ namespace NodaTime
         /// <returns>A Hebrew calendar system for the given month numbering.</returns>
         public static CalendarSystem GetHebrewCalendar(HebrewMonthNumbering monthNumbering)
         {
-            Preconditions.CheckArgumentRange(nameof(monthNumbering), (int) monthNumbering, 1, 2);
-            return HebrewCalendars.ByMonthNumbering[((int) monthNumbering) - 1];
+            Preconditions.CheckArgumentRange("monthNumbering", (int) monthNumbering, 1, 2);
+            return HebrewCalendarSystems[((int) monthNumbering) - 1];
         }
 
         /// <summary>
-        /// Returns the Badíʿ (meaning "wondrous" or "unique") calendar, as described at https://en.wikipedia.org/wiki/Badi_calendar. 
-        /// This is a purely solar calendar with years starting at the vernal equinox.
+        /// Returns a pure proleptic Gregorian calendar system, which defines every
+        /// fourth year as leap, unless the year is divisible by 100 and not by 400.
+        /// This improves upon the Julian calendar leap year rule.
         /// </summary>
         /// <remarks>
-        /// <para>The Badíʿ calendar was developed and defined by the founders of the Bahá'í Faith in the mid to late
-        /// 1800's A.D. The first year in the calendar coincides with 1844 A.D. Years are labeled "B.E." for Bahá'í Era.</para>
-        /// <para>A year consists of 19 months, each with 19 days. Each day starts at sunset. Years are grouped into sets
-        /// of 19 "Unities" (Váḥid) and 19 Unities make up 1 "All Things" (Kull-i-Shay’).</para>
-        /// <para>A period of days (usually 4 or 5, called Ayyám-i-Há) occurs between the 18th and 19th months. The length of this 
-        /// period of intercalary days is solely determined by the date of the following vernal equinox. The vernal equinox is 
-        /// a momentary point in time, so the "date" of the equinox is determined by the date (beginning 
-        /// at sunset) in effect in Tehran, Iran at the moment of the equinox.</para>
-        /// <para>In this Noda Time implementation, days start at midnight and lookup tables are used to determine vernal equinox dates.
-        /// Ayyám-i-Há is internally modelled as extra days added to the 18th month. As a result, a few functions will
-        /// not work as expected for Ayyám-i-Há, such as EndOfMonth.</para>
+        /// Although the Gregorian calendar did not exist before 1582 CE, this
+        /// calendar system assumes it did, thus it is proleptic. This implementation also
+        /// fixes the start of the year at January 1.
         /// </remarks>
-        /// <returns>The Badíʿ calendar system.</returns>
-        public static CalendarSystem Badi => MiscellaneousCalendars.Badi;
+        /// <param name="minDaysInFirstWeek">The minimum number of days in the first week of the year.
+        /// When computing the WeekOfWeekYear and WeekYear properties of a particular date, this is
+        /// used to decide at what point the week year changes.</param>
+        /// <returns>A suitable Gregorian calendar reference; the same reference may be returned by several
+        /// calls as the object is immutable and thread-safe.</returns>
+        [Obsolete("Use the Gregorian property, then WeekYearRules for specific week-year rules for compatibility with 2.0.")]
+        public static CalendarSystem GetGregorianCalendar(int minDaysInFirstWeek)
+        {
+            Preconditions.CheckArgumentRange("minDaysInFirstWeek", minDaysInFirstWeek, 1, 7);
+            return GregorianCalendarSystems[minDaysInFirstWeek - 1];
+        }
+
+        /// <summary>
+        /// Returns a pure proleptic Julian calendar system, which defines every
+        /// fourth year as a leap year. This implementation follows the leap year rule
+        /// strictly, even for dates before 8 CE, where leap years were actually
+        /// irregular.
+        /// </summary>
+        /// <remarks>
+        /// Although the Julian calendar did not exist before 45 BCE, this calendar
+        /// assumes it did, thus it is proleptic. This implementation also fixes the
+        /// start of the year at January 1.
+        /// </remarks>
+        /// <param name="minDaysInFirstWeek">The minimum number of days in the first week of the year.
+        /// When computing the WeekOfWeekYear and WeekYear properties of a particular date, this is
+        /// used to decide at what point the week year changes.</param>
+        /// <returns>A suitable Julian calendar reference; the same reference may be returned by several
+        /// calls as the object is immutable and thread-safe.</returns>
+        [Obsolete("Use the Julian property, then WeekYearRules for specific week-year rules for compatibility with 2.0.")]
+        public static CalendarSystem GetJulianCalendar(int minDaysInFirstWeek)
+        {
+            Preconditions.CheckArgumentRange("minDaysInFirstWeek", minDaysInFirstWeek, 1, 7);
+            return JulianCalendarSystems[minDaysInFirstWeek - 1];
+        }
+
+        /// <summary>
+        /// Returns a Coptic calendar system, which defines every fourth year as
+        /// leap, much like the Julian calendar. The year is broken down into 12 months,
+        /// each 30 days in length. An extra period at the end of the year is either 5
+        /// or 6 days in length. In this implementation, it is considered a 13th month.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Year 1 in the Coptic calendar began on August 29, 284 CE (Julian), thus
+        /// Coptic years do not begin at the same time as Julian years. This calendar
+        /// is not proleptic, as it does not allow dates before the first Coptic year.
+        /// </para>
+        /// <para>
+        /// This implementation defines a day as midnight to midnight exactly as per
+        /// the ISO calendar. Some references indicate that a Coptic day starts at
+        /// sunset on the previous ISO day, but this has not been confirmed and is not
+        /// implemented.
+        /// </para>
+        /// </remarks>
+        /// <param name="minDaysInFirstWeek">The minimum number of days in the first week of the year.
+        /// When computing the WeekOfWeekYear and WeekYear properties of a particular date, this is
+        /// used to decide at what point the week year changes.</param>
+        /// <returns>A suitable Coptic calendar reference; the same reference may be returned by several
+        /// calls as the object is immutable and thread-safe.</returns>
+        [Obsolete("Use the Coptic property, then WeekYearRules for specific week-year rules for compatibility with 2.0.")]
+        public static CalendarSystem GetCopticCalendar(int minDaysInFirstWeek)
+        {
+            Preconditions.CheckArgumentRange("minDaysInFirstWeek", minDaysInFirstWeek, 1, 7);
+            return CopticCalendarSystems[minDaysInFirstWeek - 1];
+        }
 
         /// <summary>
         /// Returns an Islamic, or Hijri, calendar system.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// This returns a tabular calendar, rather than one based on lunar observation. This calendar is a
+        /// This returns a tablular calendar, rather than one based on lunar observation. This calendar is a
         /// lunar calendar with 12 months, each of 29 or 30 days, resulting in a year of 354 days (or 355 on a leap
         /// year).
         /// </para>
@@ -288,34 +356,59 @@ namespace NodaTime
         /// calls as the object is immutable and thread-safe.</returns>
         public static CalendarSystem GetIslamicCalendar(IslamicLeapYearPattern leapYearPattern, IslamicEpoch epoch)
         {
-            Preconditions.CheckArgumentRange(nameof(leapYearPattern), (int) leapYearPattern, 1, 4);
-            Preconditions.CheckArgumentRange(nameof(epoch), (int) epoch, 1, 2);
-            return IslamicCalendars.ByLeapYearPatterAndEpoch[(int) leapYearPattern - 1, (int) epoch - 1];
+            Preconditions.CheckArgumentRange("leapYearPattern", (int) leapYearPattern, 1, 4);
+            Preconditions.CheckArgumentRange("epoch", (int) epoch, 1, 2);
+            return IslamicCalendarSystems[(int) leapYearPattern - 1, (int) epoch - 1];
         }
-
         #endregion
 
-        // Other fields back read-only automatic properties.
-        private readonly EraCalculator eraCalculator;
+        private readonly YearMonthDayCalculator yearMonthDayCalculator;
 
-        private CalendarSystem(CalendarOrdinal ordinal, string id, string name, YearMonthDayCalculator yearMonthDayCalculator, Era singleEra)
-            : this(ordinal, id, name, yearMonthDayCalculator, new SingleEraCalculator(singleEra, yearMonthDayCalculator))
+        // Introduced for SimpleWeekYearRule
+        internal YearMonthDayCalculator YearMonthDayCalculator => yearMonthDayCalculator;
+
+        private readonly WeekYearCalculator weekYearCalculator;
+        private readonly PeriodFieldSet periodFields;
+        private readonly string id;
+        private readonly string name;
+        private readonly IList<Era> eras;
+        private readonly int minYear;
+        private readonly int maxYear;
+        private readonly long minTicks;
+        private readonly long maxTicks;
+
+        private CalendarSystem(string name, YearMonthDayCalculator yearMonthDayCalculator, int minDaysInFirstWeek)
+            : this(CreateIdFromNameAndMinDaysInFirstWeek(name, minDaysInFirstWeek), name, yearMonthDayCalculator, minDaysInFirstWeek)
         {
         }
 
-        private CalendarSystem(CalendarOrdinal ordinal, string id, string name, YearMonthDayCalculator yearMonthDayCalculator, EraCalculator eraCalculator)
+        /// <summary>
+        /// Creates an ID for a calendar system which only needs to be distinguished by its name and
+        /// the minimum number of days in the first week of the week-year.
+        /// </summary>
+        private static string CreateIdFromNameAndMinDaysInFirstWeek(string name, int minDaysInFirstWeek)
         {
-            this.Ordinal = ordinal;
-            this.Id = id;
-            this.Name = name;
-            this.YearMonthDayCalculator = yearMonthDayCalculator;
-            this.MinYear = yearMonthDayCalculator.MinYear;
-            this.MaxYear = yearMonthDayCalculator.MaxYear;
-            this.MinDays = yearMonthDayCalculator.GetStartOfYearInDays(MinYear);
-            this.MaxDays = yearMonthDayCalculator.GetStartOfYearInDays(MaxYear + 1) - 1;
-            // We trust the construction code not to mutate the array...
-            this.eraCalculator = eraCalculator;
-            CalendarByOrdinal[(int) ordinal] = this;
+            return string.Format(CultureInfo.InvariantCulture, "{0} {1}", name, minDaysInFirstWeek);
+        }
+
+        private CalendarSystem(string id, string name, YearMonthDayCalculator yearMonthDayCalculator, int minDaysInFirstWeek)
+        {
+            this.id = id;
+            this.name = name;
+            this.yearMonthDayCalculator = yearMonthDayCalculator;
+            this.weekYearCalculator = new WeekYearCalculator(yearMonthDayCalculator, minDaysInFirstWeek);
+            this.minYear = yearMonthDayCalculator.MinYear;
+            this.maxYear = yearMonthDayCalculator.MaxYear;
+            this.minTicks = yearMonthDayCalculator.GetStartOfYearInTicks(minYear);
+            this.maxTicks = yearMonthDayCalculator.GetStartOfYearInTicks(maxYear + 1) - 1;
+            this.eras = new ReadOnlyCollection<Era>(yearMonthDayCalculator.Eras);
+            this.periodFields = new PeriodFieldSet.Builder(TimeOfDayCalculator.TimeFields)
+            {
+                Days = FixedDurationPeriodField.Days,
+                Weeks = FixedDurationPeriodField.Weeks,
+                Months = new MonthsPeriodField(yearMonthDayCalculator),
+                Years = new YearsPeriodField(yearMonthDayCalculator)
+            }.Build();
         }
 
         /// <summary>
@@ -332,13 +425,30 @@ namespace NodaTime
         /// <list type="table">
         ///   <listheader>
         ///     <term>Calendar ID</term>
-        ///     <description>Equivalent factory method or property</description>
+        ///     <description>Equivalent factory method</description>
         ///   </listheader>
         ///   <item><term>ISO</term><description><see cref="CalendarSystem.Iso"/></description></item>
-        ///   <item><term>Gregorian</term><description><see cref="CalendarSystem.Gregorian"/></description></item>
-        ///   <item><term>Coptic</term><description><see cref="CalendarSystem.Coptic"/></description></item>
-        ///   <item><term>Badi</term><description><see cref="CalendarSystem.Badi"/></description></item>
-        ///   <item><term>Julian</term><description><see cref="CalendarSystem.Julian"/></description></item>
+        ///   <item><term>Gregorian 1</term><description><see cref="CalendarSystem.GetGregorianCalendar"/>(1)</description></item>
+        ///   <item><term>Gregorian 2</term><description><see cref="CalendarSystem.GetGregorianCalendar"/>(2)</description></item>
+        ///   <item><term>Gregorian 3</term><description><see cref="CalendarSystem.GetGregorianCalendar"/>(3)</description></item>
+        ///   <item><term>Gregorian 3</term><description><see cref="CalendarSystem.GetGregorianCalendar"/>(4)</description></item>
+        ///   <item><term>Gregorian 5</term><description><see cref="CalendarSystem.GetGregorianCalendar"/>(5)</description></item>
+        ///   <item><term>Gregorian 6</term><description><see cref="CalendarSystem.GetGregorianCalendar"/>(6)</description></item>
+        ///   <item><term>Gregorian 7</term><description><see cref="CalendarSystem.GetGregorianCalendar"/>(7)</description></item>
+        ///   <item><term>Coptic 1</term><description><see cref="CalendarSystem.GetCopticCalendar"/>(1)</description></item>
+        ///   <item><term>Coptic 2</term><description><see cref="CalendarSystem.GetCopticCalendar"/>(2)</description></item>
+        ///   <item><term>Coptic 3</term><description><see cref="CalendarSystem.GetCopticCalendar"/>(3)</description></item>
+        ///   <item><term>Coptic 4</term><description><see cref="CalendarSystem.GetCopticCalendar"/>(4)</description></item>
+        ///   <item><term>Coptic 5</term><description><see cref="CalendarSystem.GetCopticCalendar"/>(5)</description></item>
+        ///   <item><term>Coptic 6</term><description><see cref="CalendarSystem.GetCopticCalendar"/>(6)</description></item>
+        ///   <item><term>Coptic 7</term><description><see cref="CalendarSystem.GetCopticCalendar"/>(7)</description></item>
+        ///   <item><term>Julian 1</term><description><see cref="CalendarSystem.GetJulianCalendar"/>(1)</description></item>
+        ///   <item><term>Julian 2</term><description><see cref="CalendarSystem.GetJulianCalendar"/>(2)</description></item>
+        ///   <item><term>Julian 3</term><description><see cref="CalendarSystem.GetJulianCalendar"/>(3)</description></item>
+        ///   <item><term>Julian 4</term><description><see cref="CalendarSystem.GetJulianCalendar"/>(4)</description></item>
+        ///   <item><term>Julian 5</term><description><see cref="CalendarSystem.GetJulianCalendar"/>(5)</description></item>
+        ///   <item><term>Julian 6</term><description><see cref="CalendarSystem.GetJulianCalendar"/>(6)</description></item>
+        ///   <item><term>Julian 7</term><description><see cref="CalendarSystem.GetJulianCalendar"/>(7)</description></item>
         ///   <item><term>Hijri Civil-Indian</term><description><see cref="CalendarSystem.GetIslamicCalendar"/>(IslamicLeapYearPattern.Indian, IslamicEpoch.Civil)</description></item>
         ///   <item><term>Hijri Civil-Base15</term><description><see cref="CalendarSystem.GetIslamicCalendar"/>(IslamicLeapYearPattern.Base15, IslamicEpoch.Civil)</description></item>
         ///   <item><term>Hijri Civil-Base16</term><description><see cref="CalendarSystem.GetIslamicCalendar"/>(IslamicLeapYearPattern.Base16, IslamicEpoch.Civil)</description></item>
@@ -347,64 +457,57 @@ namespace NodaTime
         ///   <item><term>Hijri Astronomical-Base15</term><description><see cref="CalendarSystem.GetIslamicCalendar"/>(IslamicLeapYearPattern.Base15, IslamicEpoch.Astronomical)</description></item>
         ///   <item><term>Hijri Astronomical-Base16</term><description><see cref="CalendarSystem.GetIslamicCalendar"/>(IslamicLeapYearPattern.Base16, IslamicEpoch.Astronomical)</description></item>
         ///   <item><term>Hijri Astronomical-HabashAlHasib</term><description><see cref="CalendarSystem.GetIslamicCalendar"/>(IslamicLeapYearPattern.HabashAlHasib, IslamicEpoch.Astronomical)</description></item>
-        ///   <item><term>Persian Simple</term><description><see cref="CalendarSystem.PersianSimple"/></description></item>
-        ///   <item><term>Persian Arithmetic</term><description><see cref="CalendarSystem.PersianArithmetic"/></description></item>
-        ///   <item><term>Persian Algorithmic</term><description><see cref="CalendarSystem.PersianAstronomical"/> (see note)</description></item>
-        ///   <item><term>Um Al Qura</term><description><see cref="CalendarSystem.UmAlQura"/>()</description></item>
-        ///   <item><term>Hebrew Civil</term><description><see cref="CalendarSystem.HebrewCivil"/></description></item>
-        ///   <item><term>Hebrew Scriptural</term><description><see cref="CalendarSystem.HebrewScriptural"/></description></item>
+        ///   <item><term>Persian</term><description><see cref="CalendarSystem.GetPersianCalendar"/></description></item>
+        ///   <item><term>Hebrew</term><description><see cref="CalendarSystem.GetHebrewCalendar"/></description></item>
         /// </list>
-        /// <para>
-        /// The ID "Persian Algorithmic" for the Persian Astronomical calendar is an unfortunate error. The ID has been incorrect
-        /// in Noda Time for so long that "fixing" it now would cause compatibility issues between systems storing or
-        /// exchanging Noda Time data.
-        /// </para>
         /// </remarks>
-        /// <value>The unique identifier for this calendar system.</value>
-        public string Id { get; }
+        public string Id { get { return id; } }
 
         /// <summary>
         /// Returns the name of this calendar system. Each kind of calendar system has a unique name, but this
         /// does not usually provide enough information for round-tripping. (For example, the name of an
-        /// Islamic calendar system does not indicate which kind of leap cycle it uses.)
+        /// Islamic calendar system does not indicate which kind of leap cycle it uses, and other calendars
+        /// specify the minimum number of days in the first week of a year.)
         /// </summary>
-        /// <value>The name of this calendar system.</value>
-        public string Name { get; }
+        public string Name { get { return name; } }
 
         /// <summary>
-        /// Gets the minimum valid year (inclusive) within this calendar.
+        /// Returns whether the day-of-week field refers to ISO days. If true, types such as <see cref="LocalDateTime" />
+        /// can use the <see cref="IsoDayOfWeek" /> property to avoid using magic numbers.
+        /// This defaults to true, but can be overridden by specific calendars.
         /// </summary>
-        /// <value>The minimum valid year (inclusive) within this calendar.</value>
-        public int MinYear { get; }
+        [Obsolete("Removed in 2.0 as all calendar systems are deemed to use ISO days.")]
+        public bool UsesIsoDayOfWeek { get { return true; } }
 
         /// <summary>
-        /// Gets the maximum valid year (inclusive) within this calendar.
+        /// The minimum valid year (inclusive) within this calendar.
         /// </summary>
-        /// <value>The maximum valid year (inclusive) within this calendar.</value>
-        public int MaxYear { get; }
+        public int MinYear { get { return minYear; } }
 
         /// <summary>
-        /// Returns the minimum day number this calendar can handle.
+        /// The maximum valid year (inclusive) within this calendar.
         /// </summary>
-        internal int MinDays { get; }
+        public int MaxYear { get { return maxYear; } }
 
         /// <summary>
-        /// Returns the maximum day number (inclusive) this calendar can handle.
+        /// Returns the minimum tick number this calendar can handle.
         /// </summary>
-        internal int MaxDays { get; }
+        internal long MinTicks { get { return minTicks; } }
 
         /// <summary>
-        /// Returns the ordinal value of this calendar.
+        /// Returns the maximum tick number this calendar can handle.
         /// </summary>
-        internal CalendarOrdinal Ordinal { get; }
+        internal long MaxTicks { get { return maxTicks; } }
+
+        // Added in 1.4 for the sake of SimpleWeekYearRule...
+        internal int MinDays => (int) (minTicks / NodaConstants.TicksPerDay);
+        internal int MaxDays => (int)(maxTicks / NodaConstants.TicksPerDay);
 
         #region Era-based members
-
         /// <summary>
-        /// Gets a read-only list of eras used in this calendar system.
+        /// Returns a read-only list of eras used in this calendar system.
         /// </summary>
-        /// <value>A read-only list of eras used in this calendar system.</value>
-        public IList<Era> Eras => eraCalculator.Eras;
+        public IList<Era> Eras { get { return eras; } }
 
         /// <summary>
         /// Returns the "absolute year" (the one used throughout most of the API, without respect to eras)
@@ -421,85 +524,138 @@ namespace NodaTime
         /// <returns>The absolute year represented by the specified year of era.</returns>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="yearOfEra"/> is out of the range of years for the given era.</exception>
         /// <exception cref="ArgumentException"><paramref name="era"/> is not an era used in this calendar.</exception>
-        public int GetAbsoluteYear(int yearOfEra, Era era) => eraCalculator.GetAbsoluteYear(yearOfEra, era);
+        public int GetAbsoluteYear(int yearOfEra, [NotNull] Era era)
+        {
+            return GetAbsoluteYear(yearOfEra, GetEraIndex(era));
+        }
 
         /// <summary>
         /// Returns the maximum valid year-of-era in the given era.
         /// </summary>
-        /// <remarks>Note that depending on the calendar system, it's possible that only
-        /// part of the returned year falls within the given era. It is also possible that
-        /// the returned value represents the earliest year of the era rather than the latest
-        /// year. (See the BC era in the Gregorian calendar, for example.)</remarks>
         /// <param name="era">The era in which to find the greatest year</param>
         /// <returns>The maximum valid year in the given era.</returns>
         /// <exception cref="ArgumentException"><paramref name="era"/> is not an era used in this calendar.</exception>
-        public int GetMaxYearOfEra(Era era) => eraCalculator.GetMaxYearOfEra(era);
+        public int GetMaxYearOfEra([NotNull] Era era)
+        {
+            return GetMaxYearOfEra(GetEraIndex(era));
+        }
 
         /// <summary>
         /// Returns the minimum valid year-of-era in the given era.
         /// </summary>
-        /// <remarks>Note that depending on the calendar system, it's possible that only
-        /// part of the returned year falls within the given era. It is also possible that
-        /// the returned value represents the latest year of the era rather than the earliest
-        /// year. (See the BC era in the Gregorian calendar, for example.)</remarks>
         /// <param name="era">The era in which to find the greatest year</param>
-        /// <returns>The minimum valid year in the given era.</returns>
+        /// <returns>The minimum valid year in the given eraera.</returns>
         /// <exception cref="ArgumentException"><paramref name="era"/> is not an era used in this calendar.</exception>
-        public int GetMinYearOfEra(Era era) => eraCalculator.GetMinYearOfEra(era);
-
-        #endregion
-
-        internal YearMonthDayCalculator YearMonthDayCalculator { get; }
-
-        internal YearMonthDayCalendar GetYearMonthDayCalendarFromDaysSinceEpoch(int daysSinceEpoch)
+        public int GetMinYearOfEra([NotNull] Era era)
         {
-            Preconditions.CheckArgumentRange(nameof(daysSinceEpoch), daysSinceEpoch, MinDays, MaxDays);
-            return YearMonthDayCalculator.GetYearMonthDay(daysSinceEpoch).WithCalendarOrdinal(Ordinal);
+            return GetMinYearOfEra(GetEraIndex(era));
         }
 
-        #region object overrides
+        /// <summary>
+        /// Convenience method to perform nullity and validity checking on the era, converting it to
+        /// the index within the list of eras used in this calendar system.
+        /// </summary>
+        private int GetEraIndex(Era era)
+        {
+            Preconditions.CheckNotNull(era, "era");
+            int index = Eras.IndexOf(era);
+            Preconditions.CheckArgument(index != -1, "era", "Era is not used in this calendar");
+            return index;
+        }
+        #endregion
 
+        internal PeriodFieldSet PeriodFields { get { return periodFields; } }
+
+        #region Factory methods for creating a LocalInstant from components
+        internal LocalInstant GetLocalInstant(int year, int monthOfYear, int dayOfMonth, int hourOfDay, int minuteOfHour, int secondOfMinute)
+        {
+            LocalInstant date = yearMonthDayCalculator.GetLocalInstant(year, monthOfYear, dayOfMonth);
+            long timeTicks = TimeOfDayCalculator.GetTicks(hourOfDay, minuteOfHour, secondOfMinute);
+            return date.PlusTicks(timeTicks);
+        }
+
+        internal LocalInstant GetLocalInstant(int year, int monthOfYear, int dayOfMonth, int hourOfDay, int minuteOfHour)
+        {
+            LocalInstant date = yearMonthDayCalculator.GetLocalInstant(year, monthOfYear, dayOfMonth);
+            long timeTicks = TimeOfDayCalculator.GetTicks(hourOfDay, minuteOfHour);
+            return date.PlusTicks(timeTicks);
+        }
+
+        /// <summary>
+        /// Returns the local date corresponding to the given "week year", "week of week year", and "day of week"
+        /// in this calendar system.
+        /// </summary>
+        /// <param name="weekYear">ISO-8601 week year of value to return</param>
+        /// <param name="weekOfWeekYear">ISO-8601 week of week year of value to return</param>
+        /// <param name="dayOfWeek">ISO-8601 day of week to return</param>
+        /// <returns>The date corresponding to the given week year / week of week year / day of week.</returns>
+        internal LocalInstant GetLocalInstantFromWeekYearWeekAndDayOfWeek(int weekYear, int weekOfWeekYear, IsoDayOfWeek dayOfWeek)
+        {
+            return weekYearCalculator.GetLocalInstant(weekYear, weekOfWeekYear, dayOfWeek);
+        }
+
+        /// <summary>
+        /// Returns a local instant, at the start of the day formed from the given year of era, month, day, and era arguments.
+        /// The set of given values must refer to a valid datetime.
+        /// </summary>
+        /// <param name="era">Era to use. This must be one of the eras used in this calendar</param>
+        /// <param name="yearOfEra">Year of era to use</param>
+        /// <param name="monthOfYear">Month to use</param>
+        /// <param name="dayOfMonth">Day of month to use</param>
+        /// <exception cref="ArgumentException"><paramref name="era"/> is not an era used in this calendar.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">The year of era, month of year and day of month values don't
+        /// form a valid date.</exception>
+        /// <returns>A <see cref="LocalInstant"/> with the given year, month, day and era.</returns>
+        internal LocalInstant GetLocalInstant([NotNull] Era era, int yearOfEra, int monthOfYear, int dayOfMonth)
+        {
+            return yearMonthDayCalculator.GetLocalInstant(era, yearOfEra, monthOfYear, dayOfMonth);
+        }
+
+        /// <summary>
+        /// Returns a local instant, formed from the given year, month, day,
+        /// hour, minute, second, millisecond and ticks values.
+        /// </summary>
+        /// <param name="year">Absolute year (not year within era; may be negative)</param>
+        /// <param name="monthOfYear">Month of year</param>
+        /// <param name="dayOfMonth">Day of month</param>
+        /// <param name="hourOfDay">Hour within the day (0-23)</param>
+        /// <param name="minuteOfHour">Minute within the hour</param>
+        /// <param name="secondOfMinute">Second within the minute</param>
+        /// <param name="millisecondOfSecond">Millisecond within the second</param>
+        /// <param name="tickOfMillisecond">Tick within the millisecond</param>
+        /// <returns>A <see cref="LocalInstant"/> with the given values.</returns>
+        internal LocalInstant GetLocalInstant(int year, int monthOfYear, int dayOfMonth, int hourOfDay, int minuteOfHour, int secondOfMinute, int millisecondOfSecond, int tickOfMillisecond)
+        {
+            LocalInstant date = yearMonthDayCalculator.GetLocalInstant(year, monthOfYear, dayOfMonth);
+            long timeTicks = TimeOfDayCalculator.GetTicks(hourOfDay, minuteOfHour, secondOfMinute, millisecondOfSecond, tickOfMillisecond);
+            return date.PlusTicks(timeTicks);
+        }
+        #endregion
+
+        #region object overrides
         /// <summary>
         /// Converts this calendar system to text by simply returning its unique ID.
         /// </summary>
         /// <returns>The ID of this calendar system.</returns>
-        public override string ToString() => Id;
-
+        public override string ToString()
+        {
+            return id;
+        }
         #endregion
 
         /// <summary>
-        /// Returns the number of days since the Unix epoch (1970-01-01 ISO) for the given date.
+        /// Returns the IsoDayOfWeek corresponding to the day of week for the given local instant
+        /// if this calendar uses ISO days of the week, or throws an InvalidOperationException otherwise.
         /// </summary>
-        internal int GetDaysSinceEpoch([Trusted] YearMonthDay yearMonthDay)
-        {
-            DebugValidateYearMonthDay(yearMonthDay);
-            return YearMonthDayCalculator.GetDaysSinceEpoch(yearMonthDay);
-        }
-
-        /// <summary>
-        /// Returns the IsoDayOfWeek corresponding to the day of week for the given year, month and day.
-        /// </summary>
-        /// <param name="yearMonthDay">The year, month and day to use to find the day of the week</param>
+        /// <param name="localInstant">The local instant to use to find the day of the week</param>
         /// <returns>The day of the week as an IsoDayOfWeek</returns>
-        internal IsoDayOfWeek GetDayOfWeek([Trusted] YearMonthDay yearMonthDay)
+        internal IsoDayOfWeek GetIsoDayOfWeek(LocalInstant localInstant)
         {
-            DebugValidateYearMonthDay(yearMonthDay);
-            int daysSinceEpoch = YearMonthDayCalculator.GetDaysSinceEpoch(yearMonthDay);
-            int numericDayOfWeek = unchecked(daysSinceEpoch >= -3 ? 1 + ((daysSinceEpoch + 3) % 7)
-                                           : 7 + ((daysSinceEpoch + 4) % 7));
-            return (IsoDayOfWeek) numericDayOfWeek;
-        }
-
-        /// <summary>
-        /// Returns the number of days in the given year.
-        /// </summary>
-        /// <param name="year">The year to determine the number of days in</param>
-        /// <exception cref="ArgumentOutOfRangeException">The given year is invalid for this calendar.</exception>
-        /// <returns>The number of days in the given year.</returns>
-        public int GetDaysInYear(int year)
-        {
-            Preconditions.CheckArgumentRange(nameof(year), year, MinYear, MaxYear);
-            return YearMonthDayCalculator.GetDaysInYear(year);
+            if (!UsesIsoDayOfWeek)
+            {
+                throw new InvalidOperationException("Calendar " + id + " does not use ISO days of the week");
+            }
+            return (IsoDayOfWeek) GetDayOfWeek(localInstant);
         }
 
         /// <summary>
@@ -512,9 +668,7 @@ namespace NodaTime
         /// <returns>The number of days in the given month and year.</returns>
         public int GetDaysInMonth(int year, int month)
         {
-            // Simplest way to validate the year and month. Assume it's quick enough to validate the day...
-            ValidateYearMonthDay(year, month, 1);
-            return YearMonthDayCalculator.GetDaysInMonth(year, month);
+            return yearMonthDayCalculator.GetDaysInMonth(year, month);
         }
 
         /// <summary>
@@ -527,84 +681,188 @@ namespace NodaTime
         /// <returns>True if the given year is a leap year; false otherwise.</returns>
         public bool IsLeapYear(int year)
         {
-            Preconditions.CheckArgumentRange(nameof(year), year, MinYear, MaxYear);
-            return YearMonthDayCalculator.IsLeapYear(year);
+            return yearMonthDayCalculator.IsLeapYear(year);
         }
 
         /// <summary>
-        /// Returns the maximum valid month (inclusive) within this calendar in the given year.
+        /// The number of months within this calendar in the given year. It is assumed that
+        /// all calendars start with month 1 and go up to this month number in any valid year.
         /// </summary>
-        /// <remarks>
-        /// It is assumed that in all calendars, every month between 1 and this month
-        /// number is valid for the given year. This does not necessarily mean that the first month of the year
-        /// is 1, however. (See the Hebrew calendar system using the scriptural month numbering system for example.)
-        /// </remarks>
         /// <param name="year">The year to consider.</param>
         /// <exception cref="ArgumentOutOfRangeException">The given year is invalid for this calendar.
         /// Note that some implementations may return a month rather than throw this exception (for example, if all
         /// years have the same number of months in this calendar system). Failure to throw an exception should not be
         /// treated as an indication that the year is valid.</exception>
         /// <returns>The maximum month number within the given year.</returns>
-        public int GetMonthsInYear(int year)
+        public int GetMonthsInYear(int year) => GetMaxMonth(year);
+
+        /// <summary>
+        /// The maximum valid month (inclusive) within this calendar in the given year. It is assumed that
+        /// all calendars start with month 1 and go up to this month number in any valid year.
+        /// </summary>
+        /// <param name="year">The year to consider.</param>
+        /// <exception cref="ArgumentOutOfRangeException">The given year is invalid for this calendar.
+        /// Note that some implementations may return a month rather than throw this exception (for example, if all
+        /// years have the same number of months in this calendar system). Failure to throw an exception should not be
+        /// treated as an indication that the year is valid.</exception>
+        /// <returns>The maximum month number within the given year.</returns>
+        [Obsolete("Use GetMonthsInYear for compatibility with 2.0")]
+        public int GetMaxMonth(int year)
         {
-            Preconditions.CheckArgumentRange(nameof(year), year, MinYear, MaxYear);
-            return YearMonthDayCalculator.GetMonthsInYear(year);
+            return yearMonthDayCalculator.GetMaxMonth(year);
         }
 
-        internal void ValidateYearMonthDay(int year, int month, int day)
+        /// <summary>
+        /// See <see cref="GetMaxYearOfEra(Era)"/> - but this uses a pre-validated index.
+        /// This default implementation returns the maximum year for this calendar, which is
+        /// a valid implementation for single-era calendars.
+        /// </summary>
+        internal int GetMaxYearOfEra(int eraIndex)
         {
-            YearMonthDayCalculator.ValidateYearMonthDay(year, month, day);
+            return yearMonthDayCalculator.GetMaxYearOfEra(eraIndex);
         }
 
-        internal int Compare([Trusted] YearMonthDay lhs, [Trusted] YearMonthDay rhs)
+        /// <summary>
+        /// See <see cref="GetMinYearOfEra(NodaTime.Calendars.Era)" /> - but this uses a pre-validated index.
+        /// This default implementation returns 1, but can be overridden by derived classes.
+        /// </summary>
+        internal int GetMinYearOfEra(int eraIndex)
         {
-            DebugValidateYearMonthDay(lhs);
-            DebugValidateYearMonthDay(rhs);
-            return YearMonthDayCalculator.Compare(lhs, rhs);
+            return yearMonthDayCalculator.GetMinYearOfEra(eraIndex);
+        }
+
+        /// <summary>
+        /// See <see cref="GetAbsoluteYear(int, Era)"/> - but this uses a pre-validated index.
+        /// This default implementation validates that the year is between 1 and MaxYear inclusive,
+        /// but then returns it as-is, expecting that there's no further work to be
+        /// done. This is valid for single-era calendars; the method should be overridden for multi-era calendars.
+        /// </summary>
+        internal int GetAbsoluteYear(int yearOfEra, int eraIndex)
+        {
+            return yearMonthDayCalculator.GetAbsoluteYear(yearOfEra, eraIndex);
         }
 
         #region "Getter" methods which used to be DateTimeField
-
-        internal int GetDayOfYear([Trusted] YearMonthDay yearMonthDay)
+        internal int GetTickOfSecond(LocalInstant localInstant)
         {
-            DebugValidateYearMonthDay(yearMonthDay);
-            return YearMonthDayCalculator.GetDayOfYear(yearMonthDay);
+            return TimeOfDayCalculator.GetTickOfSecond(localInstant);
         }
 
-        internal int GetYearOfEra([Trusted] int absoluteYear)
+        internal int GetTickOfMillisecond(LocalInstant localInstant)
         {
-            Preconditions.DebugCheckArgumentRange(nameof(absoluteYear), absoluteYear, MinYear, MaxYear);
-            return eraCalculator.GetYearOfEra(absoluteYear);
+            return TimeOfDayCalculator.GetTickOfMillisecond(localInstant);
         }
 
-        internal Era GetEra([Trusted] int absoluteYear)
+        internal long GetTickOfDay(LocalInstant localInstant)
         {
-            Preconditions.DebugCheckArgumentRange(nameof(absoluteYear), absoluteYear, MinYear, MaxYear);
-            return eraCalculator.GetEra(absoluteYear);
+            return TimeOfDayCalculator.GetTickOfDay(localInstant);
         }
 
-#pragma warning disable CA1822 // Make a member static because it doesn't use instance members - which is only true in a release build...
-        /// <summary>
-        /// In debug configurations only, this method calls <see cref="ValidateYearMonthDay"/>
-        /// with the components of the given YearMonthDay, ensuring that it's valid in the
-        /// current calendar.
-        /// </summary>
-        /// <param name="yearMonthDay">The value to validate.</param>
-        [Conditional("DEBUG")]
-        [ExcludeFromCodeCoverage]
-        internal void DebugValidateYearMonthDay(YearMonthDay yearMonthDay)
+        internal int GetMillisecondOfSecond(LocalInstant localInstant)
         {
-            // Avoid the line even being compiled in a release build...
-#if DEBUG
-            ValidateYearMonthDay(yearMonthDay.Year, yearMonthDay.Month, yearMonthDay.Day);
-#endif
+            return TimeOfDayCalculator.GetMillisecondOfSecond(localInstant);
         }
-#pragma warning restore CA1822
 
+        internal int GetMillisecondOfDay(LocalInstant localInstant)
+        {
+            return TimeOfDayCalculator.GetMillisecondOfDay(localInstant);
+        }
+
+        internal int GetSecondOfMinute(LocalInstant localInstant)
+        {
+            return TimeOfDayCalculator.GetSecondOfMinute(localInstant);
+        }
+
+        internal int GetSecondOfDay(LocalInstant localInstant)
+        {
+            return TimeOfDayCalculator.GetSecondOfDay(localInstant);
+        }
+
+        internal int GetMinuteOfHour(LocalInstant localInstant)
+        {
+            return TimeOfDayCalculator.GetMinuteOfHour(localInstant);
+        }
+
+        internal int GetMinuteOfDay(LocalInstant localInstant)
+        {
+            return TimeOfDayCalculator.GetMinuteOfDay(localInstant);
+        }
+
+        internal int GetHourOfDay(LocalInstant localInstant)
+        {
+            return TimeOfDayCalculator.GetHourOfDay(localInstant);
+        }
+
+        internal int GetHourOfHalfDay(LocalInstant localInstant)
+        {
+            return TimeOfDayCalculator.GetHourOfHalfDay(localInstant);
+        }
+
+        internal int GetClockHourOfHalfDay(LocalInstant localInstant)
+        {
+            return TimeOfDayCalculator.GetClockHourOfHalfDay(localInstant);
+        }
+
+        internal int GetDayOfWeek(LocalInstant localInstant)
+        {
+            return WeekYearCalculator.GetDayOfWeek(localInstant);
+        }
+
+        internal int GetDayOfMonth(LocalInstant localInstant)
+        {
+            return yearMonthDayCalculator.GetDayOfMonth(localInstant);
+        }
+
+        internal int GetDayOfYear(LocalInstant localInstant)
+        {
+            return yearMonthDayCalculator.GetDayOfYear(localInstant);
+        }
+
+        internal int GetWeekOfWeekYear(LocalInstant localInstant)
+        {
+            return weekYearCalculator.GetWeekOfWeekYear(localInstant);
+        }
+
+        internal int GetWeekYear(LocalInstant localInstant)
+        {
+            return weekYearCalculator.GetWeekYear(localInstant);
+        }
+
+        internal int GetMonthOfYear(LocalInstant localInstant)
+        {
+            return yearMonthDayCalculator.GetMonthOfYear(localInstant);
+        }
+
+        internal int GetYear(LocalInstant localInstant)
+        {
+            return yearMonthDayCalculator.GetYear(localInstant);
+        }
+
+        internal int GetYearOfCentury(LocalInstant localInstant)
+        {
+            return yearMonthDayCalculator.GetYearOfCentury(localInstant);
+        }
+
+        internal int GetYearOfEra(LocalInstant localInstant)
+        {
+            return yearMonthDayCalculator.GetYearOfEra(localInstant);
+        }
+
+        internal int GetCenturyOfEra(LocalInstant localInstant)
+        {
+            return yearMonthDayCalculator.GetCenturyOfEra(localInstant);
+        }
+
+        internal int GetEra(LocalInstant localInstant)
+        {
+            return yearMonthDayCalculator.GetEra(localInstant);
+        }
         #endregion
 
+
+        #region 2.0-compatible factory properties
         /// <summary>
-        /// Returns a Gregorian calendar system.
+        /// Returns a Gregorian calendar system with at least 4 days in the first week of a week-year.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -618,8 +876,8 @@ namespace NodaTime
         /// fixes the start of the year at January 1.
         /// </para>
         /// </remarks>
-        /// <value>A Gregorian calendar system.</value>
-        public static CalendarSystem Gregorian => GregorianJulianCalendars.Gregorian;
+        /// <value>A Gregorian calendar system with at least 4 days in the first week of a week-year.</value>
+        [NotNull] public static CalendarSystem Gregorian => GetGregorianCalendar(4);
 
         /// <summary>
         /// Returns a pure proleptic Julian calendar system, which defines every
@@ -632,9 +890,12 @@ namespace NodaTime
         /// assumes it did, thus it is proleptic. This implementation also fixes the
         /// start of the year at January 1.
         /// </remarks>
+        /// <para>
+        /// This calendar always has at least 4 days in the first week of the week-year.
+        /// </para>
         /// <value>A suitable Julian calendar reference; the same reference may be returned by several
         /// calls as the object is immutable and thread-safe.</value>
-        public static CalendarSystem Julian => GregorianJulianCalendars.Julian;
+        [NotNull] public static CalendarSystem Julian => GetJulianCalendar(4);
 
         /// <summary>
         /// Returns a Coptic calendar system, which defines every fourth year as
@@ -654,10 +915,13 @@ namespace NodaTime
         /// sunset on the previous ISO day, but this has not been confirmed and is not
         /// implemented.
         /// </para>
+        /// <para>
+        /// This calendar always has at least 4 days in the first week of the week-year.
+        /// </para>
         /// </remarks>
         /// <value>A suitable Coptic calendar reference; the same reference may be returned by several
         /// calls as the object is immutable and thread-safe.</value>
-        public static CalendarSystem Coptic => MiscellaneousCalendars.Coptic;
+        [NotNull] public static CalendarSystem Coptic => GetCopticCalendar(4);
 
         /// <summary>
         /// Returns an Islamic calendar system equivalent to the one used by the BCL HijriCalendar.
@@ -669,7 +933,7 @@ namespace NodaTime
         /// </remarks>
         /// <seealso cref="CalendarSystem.GetIslamicCalendar"/>
         /// <value>An Islamic calendar system equivalent to the one used by the BCL.</value>
-        public static CalendarSystem IslamicBcl => GetIslamicCalendar(IslamicLeapYearPattern.Base16, IslamicEpoch.Astronomical);
+        [NotNull] public static CalendarSystem IslamicBcl => GetIslamicCalendar(IslamicLeapYearPattern.Base16, IslamicEpoch.Astronomical);
 
         /// <summary>
         /// Returns a Persian (also known as Solar Hijri) calendar system implementing the behaviour of the
@@ -680,30 +944,7 @@ namespace NodaTime
         /// in each cycle are leap years.
         /// </remarks>
         /// <value>A Persian calendar system using a simple 33-year leap cycle.</value>
-        public static CalendarSystem PersianSimple => PersianCalendars.Simple;
-
-        /// <summary>
-        /// Returns a Persian (also known as Solar Hijri) calendar system implementing the behaviour of the
-        /// BCL <c>PersianCalendar</c> from .NET 4.6 onwards (and Windows 10), and the astronomical
-        /// system described in Wikipedia and Calendrical Calculations.
-        /// </summary>
-        /// <remarks>
-        /// This implementation uses data derived from the .NET 4.6 implementation (with the data built into Noda Time, so there's
-        /// no BCL dependency) for simplicity; the actual implementation involves computing the time of noon in Iran, and
-        /// is complex.
-        /// </remarks>
-        /// <value>A Persian calendar system using astronomical calculations to determine leap years.</value>
-        public static CalendarSystem PersianArithmetic => PersianCalendars.Arithmetic;
-
-        /// <summary>
-        /// Returns a Persian (also known as Solar Hijri) calendar system implementing the behaviour
-        /// proposed by Ahmad Birashk with nested cycles of years determining which years are leap years.
-        /// </summary>
-        /// <remarks>
-        /// This calendar is also known as the algorithmic Solar Hijri calendar.
-        /// </remarks>
-        /// <value>A Persian calendar system using cycles-within-cycles of years to determine leap years.</value>
-        public static CalendarSystem PersianAstronomical => PersianCalendars.Astronomical;
+        [NotNull] public static CalendarSystem PersianSimple => GetPersianCalendar();
 
         /// <summary>
         /// Returns a Hebrew calendar system using the civil month numbering,
@@ -712,137 +953,14 @@ namespace NodaTime
         /// <seealso cref="CalendarSystem.GetHebrewCalendar"/>
         /// <value>A Hebrew calendar system using the civil month numbering, equivalent to the one used by the
         /// BCL.</value>
-        public static CalendarSystem HebrewCivil => GetHebrewCalendar(HebrewMonthNumbering.Civil);
+        [NotNull] public static CalendarSystem HebrewCivil => GetHebrewCalendar(HebrewMonthNumbering.Civil);
 
         /// <summary>
         /// Returns a Hebrew calendar system using the scriptural month numbering.
         /// </summary>
         /// <seealso cref="CalendarSystem.GetHebrewCalendar"/>
         /// <value>A Hebrew calendar system using the scriptural month numbering.</value>
-        public static CalendarSystem HebrewScriptural => GetHebrewCalendar(HebrewMonthNumbering.Scriptural);
-
-        /// <summary>
-        /// Returns an Um Al Qura calendar system - an Islamic calendar system primarily used by
-        /// Saudi Arabia.
-        /// </summary>
-        /// <remarks>
-        /// This is a tabular calendar, relying on pregenerated data.
-        /// </remarks>
-        /// <value>A calendar system for the Um Al Qura calendar.</value>
-        public static CalendarSystem UmAlQura => MiscellaneousCalendars.UmAlQura;
-
-        // TODO: Move this after fixing https://github.com/nodatime/nodatime/issues/1269
-        [VisibleForTesting]
-        internal static CalendarSystem ForOrdinalUncached([Trusted] CalendarOrdinal ordinal) => ordinal switch
-        {
-            // This entry is really just for completeness. We'd never get called with this.
-            CalendarOrdinal.Iso => Iso,
-            CalendarOrdinal.Gregorian => Gregorian,
-            CalendarOrdinal.Julian => Julian,
-            CalendarOrdinal.Coptic => Coptic,
-            CalendarOrdinal.Badi => Badi,
-            CalendarOrdinal.HebrewCivil => HebrewCivil,
-            CalendarOrdinal.HebrewScriptural => HebrewScriptural,
-            CalendarOrdinal.PersianSimple => PersianSimple,
-            CalendarOrdinal.PersianArithmetic => PersianArithmetic,
-            CalendarOrdinal.PersianAstronomical => PersianAstronomical,
-            CalendarOrdinal.IslamicAstronomicalBase15 => GetIslamicCalendar(IslamicLeapYearPattern.Base15, IslamicEpoch.Astronomical),
-            CalendarOrdinal.IslamicAstronomicalBase16 => GetIslamicCalendar(IslamicLeapYearPattern.Base16, IslamicEpoch.Astronomical),
-            CalendarOrdinal.IslamicAstronomicalIndian => GetIslamicCalendar(IslamicLeapYearPattern.Indian, IslamicEpoch.Astronomical),
-            CalendarOrdinal.IslamicAstronomicalHabashAlHasib => GetIslamicCalendar(IslamicLeapYearPattern.HabashAlHasib, IslamicEpoch.Astronomical),
-            CalendarOrdinal.IslamicCivilBase15 => GetIslamicCalendar(IslamicLeapYearPattern.Base15, IslamicEpoch.Civil),
-            CalendarOrdinal.IslamicCivilBase16 => GetIslamicCalendar(IslamicLeapYearPattern.Base16, IslamicEpoch.Civil),
-            CalendarOrdinal.IslamicCivilIndian => GetIslamicCalendar(IslamicLeapYearPattern.Indian, IslamicEpoch.Civil),
-            CalendarOrdinal.IslamicCivilHabashAlHasib => GetIslamicCalendar(IslamicLeapYearPattern.HabashAlHasib, IslamicEpoch.Civil),
-            CalendarOrdinal.UmAlQura => UmAlQura,
-            _ => throw new InvalidOperationException($"Bug in Noda Time: calendar ordinal {ordinal} missing from switch in CalendarSystem.ForOrdinal.")
-        };
-
-        // "Holder" classes for lazy initialization of calendar systems
-
-        private static class PersianCalendars
-        {
-            internal static readonly CalendarSystem Simple =
-                new CalendarSystem(CalendarOrdinal.PersianSimple, PersianSimpleId, PersianName, new PersianYearMonthDayCalculator.Simple(), Era.AnnoPersico);
-            internal static readonly CalendarSystem Arithmetic =
-                new CalendarSystem(CalendarOrdinal.PersianArithmetic, PersianArithmeticId, PersianName, new PersianYearMonthDayCalculator.Arithmetic(), Era.AnnoPersico);
-            internal static readonly CalendarSystem Astronomical =
-                new CalendarSystem(CalendarOrdinal.PersianAstronomical, PersianAstronomicalId, PersianName, new PersianYearMonthDayCalculator.Astronomical(), Era.AnnoPersico);
-
-            // Static constructor to enforce laziness.
-            static PersianCalendars() {}
-        }
-
-        /// <summary>
-        /// Specifically the calendars implemented by IslamicYearMonthDayCalculator, as opposed to all
-        /// Islam-based calendars (which would include UmAlQura and Persian, for example).
-        /// </summary>
-        private static class IslamicCalendars
-        {
-#pragma warning disable CA1814 // Prefer jagged arrays; in this case it would take *more* space.
-            internal static readonly CalendarSystem[,] ByLeapYearPatterAndEpoch;
-
-            static IslamicCalendars()
-            {
-                ByLeapYearPatterAndEpoch = new CalendarSystem[4, 2];
-#pragma warning restore CA1814
-                for (int i = 1; i <= 4; i++)
-                {
-                    for (int j = 1; j <= 2; j++)
-                    {
-                        var leapYearPattern = (IslamicLeapYearPattern) i;
-                        var epoch = (IslamicEpoch) j;
-                        var calculator = new IslamicYearMonthDayCalculator((IslamicLeapYearPattern) i, (IslamicEpoch) j);
-                        CalendarOrdinal ordinal = CalendarOrdinal.IslamicAstronomicalBase15 + (i - 1) + (j - 1) * 4;
-                        ByLeapYearPatterAndEpoch[i - 1, j - 1] = new CalendarSystem(ordinal, GetIslamicId(leapYearPattern, epoch), IslamicName, calculator, Era.AnnoHegirae);
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Odds and ends, with an assumption that it's not *that* painful to initialize UmAlQura if you only
-        /// need Coptic, for example.
-        /// </summary>
-        private static class MiscellaneousCalendars
-        {
-            internal static readonly CalendarSystem Coptic =
-                new CalendarSystem(CalendarOrdinal.Coptic, CopticId, CopticName, new CopticYearMonthDayCalculator(), Era.AnnoMartyrum);
-            internal static readonly CalendarSystem UmAlQura =
-                new CalendarSystem(CalendarOrdinal.UmAlQura, UmAlQuraId, UmAlQuraName, new UmAlQuraYearMonthDayCalculator(), Era.AnnoHegirae);
-            internal static readonly CalendarSystem Badi =
-                new CalendarSystem(CalendarOrdinal.Badi, BadiId, BadiName, new BadiYearMonthDayCalculator(), Era.Bahai);
-
-            // Static constructor to enforce laziness. This used to be important to avoid a Heisenbug.
-            // I don't believe it's strictly required now, but it does no harm and I don't want to go
-            // through the pain I went through before. Besides, very few users will actually want these
-            // calendars, so making this fully lazy avoids unnecessary initialization.
-            static MiscellaneousCalendars() { }
-        }
-
-        private static class GregorianJulianCalendars
-        {
-            internal static readonly CalendarSystem Gregorian;
-            internal static readonly CalendarSystem Julian;
-
-            static GregorianJulianCalendars()
-            {
-                var julianCalculator = new JulianYearMonthDayCalculator();
-                Julian = new CalendarSystem(CalendarOrdinal.Julian, JulianId, JulianName, julianCalculator, new GJEraCalculator(julianCalculator));
-                Gregorian = new CalendarSystem(CalendarOrdinal.Gregorian, GregorianId, GregorianName, Iso.YearMonthDayCalculator, Iso.eraCalculator);
-            }
-        }
-
-        private static class HebrewCalendars
-        {
-            internal static readonly CalendarSystem[] ByMonthNumbering =
-            {
-                new CalendarSystem(CalendarOrdinal.HebrewCivil, HebrewCivilId, HebrewName, new HebrewYearMonthDayCalculator(HebrewMonthNumbering.Civil), Era.AnnoMundi),
-                new CalendarSystem(CalendarOrdinal.HebrewScriptural, HebrewScripturalId, HebrewName, new HebrewYearMonthDayCalculator(HebrewMonthNumbering.Scriptural), Era.AnnoMundi)
-            };
-
-            // Static constructor to enforce laziness.
-            static HebrewCalendars() { }
-        }
+        [NotNull] public static CalendarSystem HebrewScriptural => GetHebrewCalendar(HebrewMonthNumbering.Scriptural);
+        #endregion
     }
 }

@@ -2,9 +2,9 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using NodaTime.Utility;
 using System.Collections.Generic;
 using System.IO;
+using NodaTime.Utility;
 
 namespace NodaTime.TimeZones.IO
 {
@@ -15,12 +15,6 @@ namespace NodaTime.TimeZones.IO
     /// </summary>
     internal interface IDateTimeZoneReader
     {
-        /// <summary>
-        /// Returns whether or not there is more data in this stream.
-        /// </summary>
-        /// <value>Whether or not there is more data in the stream.</value>
-        bool HasMoreData { get; }
-
         /// <summary>
         /// Reads a non-negative integer from the stream, which must have been written
         /// by a call to <see cref="IDateTimeZoneWriter.WriteCount"/>.
@@ -53,14 +47,6 @@ namespace NodaTime.TimeZones.IO
         /// <returns>The 8 bit int value.</returns>
         /// <exception cref="InvalidNodaDataException">The data in the stream has been exhausted.</exception>
         byte ReadByte();
-
-        /// <summary>
-        /// Reads a number of milliseconds from the stream.
-        /// </summary>
-        /// <returns>The number of milliseconds read from the stream</returns>
-        /// <exception cref="InvalidNodaDataException">The data was invalid.</exception>
-        /// <exception cref="IOException">The stream could not be read.</exception>
-        int ReadMilliseconds();
 
         /// <summary>
         /// Reads an offset from the stream.

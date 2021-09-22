@@ -2,6 +2,7 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
+using System.Globalization;
 using NodaTime.Text;
 using NodaTime.TimeZones.IO;
 using NodaTime.Utility;
@@ -9,47 +10,35 @@ using System;
 
 namespace NodaTime.TimeZones
 {
-    // Implementation note: this implemented IEquatable<FixedDateTimeZone> for the sake of fitting in with our test infrastructure
-    // more than anything else...
-
     /// <summary>
     /// Basic <see cref="DateTimeZone" /> implementation that has a fixed name key and offset i.e.
     /// no daylight savings.
     /// </summary>
     /// <threadsafety>This type is immutable reference type. See the thread safety section of the user guide for more information.</threadsafety>
-    internal sealed class FixedDateTimeZone : DateTimeZone, IEquatable<FixedDateTimeZone?>
+    internal sealed class FixedDateTimeZone : DateTimeZone
     {
+        private readonly Offset offset;
         private readonly ZoneInterval interval;
+        private readonly ZoneIntervalPair intervalPair;
 
         /// <summary>
         /// Creates a new fixed time zone.
         /// </summary>
-        /// <remarks>The ID and name (for the <see cref="ZoneInterval"/>) are generated based on the offset.</remarks>
         /// <param name="offset">The <see cref="Offset"/> from UTC.</param>
-        internal FixedDateTimeZone(Offset offset) : this(MakeId(offset), offset)
+        public FixedDateTimeZone(Offset offset) : this(MakeId(offset), offset)
         {
         }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="FixedDateTimeZone"/> class.
         /// </summary>
-        /// <remarks>The name (for the <see cref="ZoneInterval"/>) is deemed to be the same as the ID.</remarks>
         /// <param name="id">The id.</param>
         /// <param name="offset">The offset.</param>
-        internal FixedDateTimeZone(string id, Offset offset) : this(id, offset, id)
+        public FixedDateTimeZone(string id, Offset offset) : base(id, true, offset, offset)
         {
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="FixedDateTimeZone"/> class.
-        /// </summary>
-        /// <remarks>The name (for the <see cref="ZoneInterval"/>) is deemed to be the same as the ID.</remarks>
-        /// <param name="id">The id.</param>
-        /// <param name="offset">The offset.</param>
-        /// <param name="name">The name to use in the sole <see cref="ZoneInterval"/> in this zone.</param>
-        internal FixedDateTimeZone(string id, Offset offset, string name) : base(id, true, offset, offset)
-        {
-            interval = new ZoneInterval(name, Instant.BeforeMinValue, Instant.AfterMaxValue, offset, Offset.Zero);
+            this.offset = offset;
+            interval = new ZoneInterval(id, Instant.MinValue, Instant.MaxValue, offset, Offset.Zero);
+            intervalPair = ZoneIntervalPair.Unambiguous(interval);
         }
 
         /// <summary>
@@ -63,7 +52,8 @@ namespace NodaTime.TimeZones
             {
                 return UtcId;
             }
-            return UtcId + OffsetPattern.GeneralInvariant.Format(offset);
+            return string.Format(CultureInfo.InvariantCulture,
+                "{0}{1}", UtcId, OffsetPattern.GeneralInvariantPattern.Format(offset));
         }
 
         /// <summary>
@@ -72,9 +62,9 @@ namespace NodaTime.TimeZones
         /// </summary>
         /// <param name="id">ID </param>
         /// <returns>The parsed time zone, or null if the ID doesn't match.</returns>
-        internal static DateTimeZone? GetFixedZoneOrNull(string id)
+        internal static DateTimeZone GetFixedZoneOrNull(string id)
         {
-            if (!id.StartsWith(UtcId, StringComparison.Ordinal))
+            if (!id.StartsWith(UtcId))
             {
                 return null;
             }
@@ -82,7 +72,7 @@ namespace NodaTime.TimeZones
             {
                 return Utc;
             }
-            var parseResult = OffsetPattern.GeneralInvariant.Parse(id.Substring(UtcId.Length));
+            var parseResult = OffsetPattern.GeneralInvariantPattern.Parse(id.Substring(UtcId.Length));
             return parseResult.Success ? ForOffset(parseResult.Value) : null;
         }
 
@@ -90,24 +80,23 @@ namespace NodaTime.TimeZones
         /// Returns the fixed offset for this time zone.
         /// </summary>
         /// <returns>The fixed offset for this time zone.</returns>
-        public Offset Offset => MaxOffset;
-
-        /// <summary>
-        /// Returns the name used for the zone interval for this time zone.
-        /// </summary>
-        /// <returns>The name used for the zone interval for this time zone.</returns>
-        public string Name => interval.Name;
+        public Offset Offset { get { return offset; } }
 
         /// <summary>
         /// Gets the zone interval for the given instant. This implementation always returns the same interval.
         /// </summary>
-        public override ZoneInterval GetZoneInterval(Instant instant) => interval;
+        public override ZoneInterval GetZoneInterval(Instant instant)
+        {
+            return interval;
+        }
 
         /// <summary>
-        /// Override for efficiency: we know we'll always have an unambiguous mapping for any LocalDateTime.
+        /// Gets the zone interval pair for the given instant. This implementation always returns the same unambiguous interval pair.
         /// </summary>
-        public override ZoneLocalMapping MapLocal(LocalDateTime localDateTime) =>
-            new ZoneLocalMapping(this, localDateTime, interval, interval, 1);
+        internal override ZoneIntervalPair GetZoneIntervalPair(LocalInstant localInstant)
+        {
+            return intervalPair;
+        }
 
         /// <summary>
         /// Returns the offset from UTC, where a positive duration indicates that local time is later
@@ -117,7 +106,10 @@ namespace NodaTime.TimeZones
         /// <returns>
         /// The offset from UTC at the specified instant.
         /// </returns>
-        public override Offset GetUtcOffset(Instant instant) => MaxOffset;
+        public override Offset GetUtcOffset(Instant instant)
+        {
+            return offset;
+        }
 
         /// <summary>
         /// Writes the time zone to the specified writer.
@@ -125,9 +117,8 @@ namespace NodaTime.TimeZones
         /// <param name="writer">The writer.</param>
         internal void Write(IDateTimeZoneWriter writer)
         {
-            Preconditions.CheckNotNull(writer, nameof(writer));
-            writer.WriteOffset(Offset);
-            writer.WriteString(Name);
+            Preconditions.CheckNotNull(writer, "writer");
+            writer.WriteOffset(offset);
         }
 
         /// <summary>
@@ -138,38 +129,26 @@ namespace NodaTime.TimeZones
         /// <returns>The fixed time zone.</returns>
         public static DateTimeZone Read(IDateTimeZoneReader reader, string id)
         {
-            Preconditions.CheckNotNull(reader, nameof(reader));
-            Preconditions.CheckNotNull(id, nameof(id));
+            Preconditions.CheckNotNull(reader, "reader");
+            Preconditions.CheckNotNull(reader, "id");
             var offset = reader.ReadOffset();
-            var name = reader.HasMoreData ? reader.ReadString() : id;
-            return new FixedDateTimeZone(id, offset, name);
+            return new FixedDateTimeZone(id, offset);
         }
 
-        /// <summary>
-        /// Indicates whether this instance and a specified object are equal.
-        /// </summary>
-        /// <returns>
-        /// true if <paramref name="obj"/> and this instance are the same type and represent the same value; otherwise, false.
-        /// </returns>
-        /// <param name="obj">Another object to compare to.</param> 
-        /// <filterpriority>2</filterpriority>
-        /// <returns>True if the specified value is a <see cref="FixedDateTimeZone"/> with the same name, ID and offset; otherwise, false.</returns>
-        public override bool Equals(object? obj) => Equals(obj as FixedDateTimeZone);
+        [Obsolete("General DateTimeZone equality is not supported in 2.0")]
+        protected override bool EqualsImpl(DateTimeZone other)
+        {
+            FixedDateTimeZone otherZone = (FixedDateTimeZone) other;
+            return offset == otherZone.offset && Id == other.Id;
+        }
 
-        public bool Equals(FixedDateTimeZone? other) =>
-            other != null &&
-            Offset == other.Offset &&
-            Id == other.Id &&
-            Name == other.Name;
-
-        /// <summary>
-        /// Computes the hash code for this instance.
-        /// </summary>
-        /// <returns>
-        /// A 32-bit signed integer that is the hash code for this instance.
-        /// </returns>
-        /// <filterpriority>2</filterpriority>
-        public override int GetHashCode() => HashCodeHelper.Hash(Offset, Id, Name);
+        public override int GetHashCode()
+        {
+            int hash = HashCodeHelper.Initialize();
+            hash = HashCodeHelper.Hash(hash, offset);
+            hash = HashCodeHelper.Hash(hash, Id);
+            return hash;
+        }
 
         /// <summary>
         /// Returns a <see cref="System.String"/> that represents this instance.
@@ -177,6 +156,9 @@ namespace NodaTime.TimeZones
         /// <returns>
         /// A <see cref="System.String"/> that represents this instance.
         /// </returns>
-        public override string ToString() => Id;
+        public override string ToString()
+        {
+            return Id;
+        }
     }
 }

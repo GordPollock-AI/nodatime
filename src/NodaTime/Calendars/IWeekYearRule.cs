@@ -2,6 +2,7 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
+using JetBrains.Annotations;
 using NodaTime.Utility;
 using System;
 
@@ -79,25 +80,21 @@ namespace NodaTime.Calendars
         /// <param name="calendar">The calendar system for the date.</param>
         /// <exception cref="ArgumentOutOfRangeException">The parameters do not combine to form a valid date.</exception>
         /// <returns>A <see cref="LocalDate"/> corresponding to the specified values.</returns>
-        LocalDate GetLocalDate(int weekYear, int weekOfWeekYear, IsoDayOfWeek dayOfWeek, CalendarSystem calendar);
+        LocalDate GetLocalDate(int weekYear, int weekOfWeekYear, IsoDayOfWeek dayOfWeek, [NotNull] CalendarSystem calendar);
 
         /// <summary>
         /// Calculates the week-year in which the given date occurs, according to this rule.
         /// </summary>
         /// <param name="date">The date to compute the week-year of.</param>
         /// <returns>The week-year of <paramref name="date"/>, according to this rule.</returns>
-#pragma warning disable CA1716 // Parameter name conflicts with a framework name
         int GetWeekYear(LocalDate date);
-#pragma warning restore CA1716
 
         /// <summary>
         /// Calculates the week of the week-year in which the given date occurs, according to this rule.
         /// </summary>
         /// <param name="date">The date to compute the week of.</param>
         /// <returns>The week of the week-year of <paramref name="date"/>, according to this rule.</returns>
-#pragma warning disable CA1716 // Parameter name conflicts with a framework name
         int GetWeekOfWeekYear(LocalDate date);
-#pragma warning restore CA1716
 
         /// <summary>
         /// Returns the number of weeks in the given week-year, within the specified calendar system.
@@ -105,7 +102,7 @@ namespace NodaTime.Calendars
         /// <param name="weekYear">The week-year to find the range of.</param>
         /// <param name="calendar">The calendar system the calculation is relative to.</param>
         /// <returns>The number of weeks in the given week-year within the given calendar.</returns>
-        int GetWeeksInWeekYear(int weekYear, CalendarSystem calendar);
+        int GetWeeksInWeekYear(int weekYear, [NotNull] CalendarSystem calendar);
     }
 
     /// <summary>
@@ -128,7 +125,7 @@ namespace NodaTime.Calendars
         /// depending on <paramref name="weekYear"/> and <paramref name="weekOfWeekYear"/>.</param>
         /// <exception cref="ArgumentOutOfRangeException">The parameters do not combine to form a valid date.</exception>
         /// <returns>A <see cref="LocalDate"/> corresponding to the specified values.</returns>
-        public static LocalDate GetLocalDate(this IWeekYearRule rule, int weekYear, int weekOfWeekYear, IsoDayOfWeek dayOfWeek) =>
+        public static LocalDate GetLocalDate([NotNull] this IWeekYearRule rule, int weekYear, int weekOfWeekYear, IsoDayOfWeek dayOfWeek) =>
             Preconditions.CheckNotNull(rule, nameof(rule)).GetLocalDate(weekYear, weekOfWeekYear, dayOfWeek, CalendarSystem.Iso);
 
         /// <summary>
@@ -138,7 +135,7 @@ namespace NodaTime.Calendars
         /// <param name="rule">The rule to delegate the call to.</param>
         /// <param name="weekYear">The week year to calculate the number of contained weeks.</param>
         /// <returns>The number of weeks in the given week year.</returns>
-        public static int GetWeeksInWeekYear(this IWeekYearRule rule, int weekYear) =>
+        public static int GetWeeksInWeekYear([NotNull] this IWeekYearRule rule, int weekYear) =>
             Preconditions.CheckNotNull(rule, nameof(rule)).GetWeeksInWeekYear(weekYear, CalendarSystem.Iso);
     }
 }

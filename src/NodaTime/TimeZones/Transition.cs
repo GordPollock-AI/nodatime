@@ -8,26 +8,34 @@ namespace NodaTime.TimeZones
 {
     /// <summary>
     /// A transition between two offsets, usually for daylight saving reasons. This type only knows about
-    /// the new offset, and the transition point.
+    /// the old offset, the new offset, and the transition point.
     /// </summary>
     /// 
     /// <threadsafety>This type is an immutable value type. See the thread safety section of the user guide for more information.</threadsafety>
-    internal readonly struct Transition : IEquatable<Transition>
+    internal struct Transition : IEquatable<Transition>
     {
-        internal Instant Instant { get; }
+        private readonly Instant instant;
+        internal Instant Instant { get { return instant; } }
+
+        private readonly Offset oldOffset;
+        private readonly Offset newOffset;
 
         /// <summary>
         /// The offset from the time when this transition occurs until the next transition.
         /// </summary>
-        internal Offset NewOffset { get; }
+        internal Offset NewOffset { get { return newOffset; } }
 
-        internal Transition(Instant instant, Offset newOffset) : this()
+        internal Transition(Instant instant, Offset oldOffset, Offset newOffset)
         {
-            this.Instant = instant;
-            this.NewOffset = newOffset;
+            this.instant = instant;
+            this.oldOffset = oldOffset;
+            this.newOffset = newOffset;
         }
 
-        public bool Equals(Transition other) => Instant == other.Instant && NewOffset == other.NewOffset;
+        public bool Equals(Transition other)
+        {
+            return instant == other.Instant && oldOffset == other.oldOffset && newOffset == other.NewOffset;
+        }
 
         #region Operators
         /// <summary>
@@ -36,7 +44,10 @@ namespace NodaTime.TimeZones
         /// <param name="left">The left hand side of the operator.</param>
         /// <param name="right">The right hand side of the operator.</param>
         /// <returns><c>true</c> if values are equal to each other, otherwise <c>false</c>.</returns>
-        public static bool operator ==(Transition left, Transition right) => left.Equals(right);
+        public static bool operator ==(Transition left, Transition right)
+        {
+            return left.Equals(right);
+        }
 
         /// <summary>
         /// Implements the operator != (inequality).
@@ -44,7 +55,10 @@ namespace NodaTime.TimeZones
         /// <param name="left">The left hand side of the operator.</param>
         /// <param name="right">The right hand side of the operator.</param>
         /// <returns><c>true</c> if values are not equal to each other, otherwise <c>false</c>.</returns>
-        public static bool operator !=(Transition left, Transition right) => !(left == right);
+        public static bool operator !=(Transition left, Transition right)
+        {
+            return !(left == right);
+        }
         #endregion
 
         #region Object overrides
@@ -56,7 +70,14 @@ namespace NodaTime.TimeZones
         /// <c>true</c> if the specified <see cref="System.Object"/> is equal to this instance;
         /// otherwise, <c>false</c>.
         /// </returns>
-        public override bool Equals(object? obj) => obj is Transition other && Equals(other);
+        public override bool Equals(object obj)
+        {
+            if (obj is Transition)
+            {
+                return Equals((Transition)obj);
+            }
+            return false;
+        }
 
         /// <summary>
         /// Returns a hash code for this instance.
@@ -67,13 +88,11 @@ namespace NodaTime.TimeZones
         /// </returns>
         public override int GetHashCode()
         {
-            unchecked
-            {
-                int hash = 23;
-                hash = hash * 31 + Instant.GetHashCode();
-                hash = hash * 31 + NewOffset.GetHashCode();
-                return hash;
-            }
+            int hash = 23;
+            hash = hash * 31 + instant.GetHashCode();
+            hash = hash * 31 + oldOffset.GetHashCode();
+            hash = hash * 31 + newOffset.GetHashCode();
+            return hash;
         }
 
         /// <summary>
@@ -82,7 +101,10 @@ namespace NodaTime.TimeZones
         /// <returns>
         /// A <see cref="System.String"/> that represents this instance.
         /// </returns>
-        public override string ToString() => $"Transition to {NewOffset} at {Instant}";
+        public override string ToString()
+        {
+            return "Transition from " + oldOffset + " to " + newOffset + " at " + instant;
+        }
         #endregion  // Object overrides
     }
 }

@@ -2,6 +2,8 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace NodaTime.Utility
 {
     /// <summary>
@@ -12,76 +14,70 @@ namespace NodaTime.Utility
     /// The basic usage pattern is:
     /// <example>
     /// <code>
-    ///  public override int GetHashCode() => HashCodeHelper.Initialize().Hash(Field1).Hash(Field2).Hash(Field3).Value;
+    ///    public override int GetHashCode()
+    ///    {
+    ///        int hash = HashCodeHelper.Initialize();
+    ///        hash = HashCodeHelper.Hash(hash, Field1);
+    ///        hash = HashCodeHelper.Hash(hash, Field1);
+    ///        hash = HashCodeHelper.Hash(hash, Field1);
+    ///        ...
+    ///        return hash;
+    ///    }
     /// </code>
     /// </example>
     /// </remarks>
-    internal readonly struct HashCodeHelper
+    internal static class HashCodeHelper
     {
         /// <summary>
         /// The multiplier for each value.
         /// </summary>
-        private const int HashCodeMultiplier = 37;
+        private const int HashcodeMultiplier = 37;
 
         /// <summary>
         /// The initial hash value.
         /// </summary>
-        private const int HashCodeInitializer = 17;
-
-        public int Value { get; }
-
-        internal HashCodeHelper(int value)
-        {
-            Value = value;
-        }
-
-        /// <summary>
-        /// Convenience method to hash two values.
-        /// </summary>
-        internal static int Hash<T1, T2>(T1 t1, T2 t2)
-        {
-            unchecked
-            {
-                int hash = HashCodeInitializer;
-                hash = hash * HashCodeMultiplier + (t1?.GetHashCode() ?? 0);
-                hash = hash * HashCodeMultiplier + (t2?.GetHashCode() ?? 0);
-                return hash;
-            }
-        }
-
-        /// <summary>
-        /// Convenience method to hash three values.
-        /// </summary>
-        internal static int Hash<T1, T2, T3>(T1 t1, T2 t2, T3 t3)
-        {
-            unchecked
-            {
-                int hash = HashCodeInitializer;
-                hash = hash * HashCodeMultiplier + (t1?.GetHashCode() ?? 0);
-                hash = hash * HashCodeMultiplier + (t2?.GetHashCode() ?? 0);
-                hash = hash * HashCodeMultiplier + (t3?.GetHashCode() ?? 0);
-                return hash;
-            }
-        }
+        private const int HashcodeInitializer = 17;
 
         /// <summary>
         /// Returns the initial value for a hash code.
         /// </summary>
-        /// <returns>The initial integer wrapped in a <see cref="HashCodeHelper"/> value.</returns>
-        internal static HashCodeHelper Initialize() => new HashCodeHelper(HashCodeInitializer);
+        /// <returns>The initial interger value.</returns>
+        internal static int Initialize()
+        {
+            return HashcodeInitializer;
+        }
 
         /// <summary>
         /// Adds the hash value for the given value to the current hash and returns the new value.
         /// </summary>
         /// <typeparam name="T">The type of the value being hashed.</typeparam>
+        /// <param name="code">The previous hash code.</param>
         /// <param name="value">The value to hash.</param>
         /// <returns>The new hash code.</returns>
-        internal HashCodeHelper Hash<T>(T value)
+        internal static int Hash<T>(int code, T value)
+        {
+            int hash = 0;
+            if (value != null)
+            {
+                hash = value.GetHashCode();
+            }
+            return MakeHash(code, hash);
+        }
+
+        /// <summary>
+        /// Adds the hash value for a int to the current hash value and returns the new value.
+        /// </summary>
+        /// <param name="code">The previous hash code.</param>
+        /// <param name="value">The value to add to the hash code.</param>
+        /// <returns>The new hash code.</returns>
+        [SuppressMessage("Microsoft.Usage", "CA2233:OperationsShouldNotOverflow", Justification = "Deliberately overflowing.")]
+        private static int MakeHash(int code, int value)
         {
             unchecked
             {
-                return new HashCodeHelper(Value * HashCodeMultiplier + (value?.GetHashCode() ?? 0));
+                code = (code * HashcodeMultiplier) + value;
             }
+            return code;
         }
     }
 }

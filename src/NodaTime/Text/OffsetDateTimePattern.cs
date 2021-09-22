@@ -2,12 +2,12 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
+using System.Globalization;
 using NodaTime.Annotations;
 using NodaTime.Globalization;
 using NodaTime.Text.Patterns;
 using NodaTime.Utility;
-using System.Globalization;
-using System.Text;
+using System;
 
 namespace NodaTime.Text
 {
@@ -25,55 +25,78 @@ namespace NodaTime.Text
         internal static readonly OffsetDateTime DefaultTemplateValue = new LocalDateTime(2000, 1, 1, 0, 0).WithOffset(Offset.Zero);
 
         /// <summary>
-        /// Gets an invariant offset date/time pattern based on ISO-8601 (down to the second), including offset from UTC.
-        /// </summary>
-        /// <remarks>
+        /// Returns an invariant offset date/time pattern based on ISO-8601 (down to the second), including offset from UTC.
         /// The calendar system is not parsed or formatted as part of this pattern. It corresponds to a custom pattern of
-        /// "uuuu'-'MM'-'dd'T'HH':'mm':'sso&lt;G&gt;". This pattern is available as the "G"
+        /// "yyyy'-'MM'-'dd'T'HH':'mm':'sso&lt;G&gt;". This pattern is available as the "G"
         /// standard pattern (even though it is invariant).
-        /// </remarks>
-        /// <value>An invariant offset date/time pattern based on ISO-8601 (down to the second), including offset from UTC.</value>
-        public static OffsetDateTimePattern GeneralIso => Patterns.GeneralIsoPatternImpl;
+        /// </summary>
+        public static OffsetDateTimePattern GeneralIso => GeneralIsoPattern;
 
         /// <summary>
-        /// Gets an invariant offset date/time pattern based on ISO-8601 (down to the nanosecond), including offset from UTC.
-        /// </summary>
-        /// <remarks>
+        /// Returns an invariant offset date/time pattern based on ISO-8601 (down to the second), including offset from UTC.
         /// The calendar system is not parsed or formatted as part of this pattern. It corresponds to a custom pattern of
-        /// "uuuu'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFFFFo&lt;G&gt;". This will round-trip any values
-        /// in the ISO calendar, and is available as the "o" standard pattern.
-        /// </remarks>
-        /// <value>An invariant offset date/time pattern based on ISO-8601 (down to the nanosecond), including offset from UTC.</value>
-        public static OffsetDateTimePattern ExtendedIso => Patterns.ExtendedIsoPatternImpl;
+        /// "yyyy'-'MM'-'dd'T'HH':'mm':'sso&lt;G&gt;". This pattern is available as the "G"
+        /// standard pattern (even though it is invariant).
+        /// </summary>
+        [Obsolete("Use GeneralIso for compatibility with 2.0")]
+        public static OffsetDateTimePattern GeneralIsoPattern { get { return Patterns.GeneralIsoPatternImpl; } }
 
         /// <summary>
-        /// Gets an invariant offset date/time pattern based on RFC 3339 (down to the nanosecond), including offset from UTC
-        /// as hours and minutes only.
+        /// Returns an invariant offset date/time pattern based on ISO-8601 (down to the tick), including offset from UTC.
+        /// The calendar system is not parsed or formatted as part of this pattern. It corresponds to a custom pattern of
+        /// "yyyy'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFFo&lt;G&gt;". This will round-trip any values
+        /// in the ISO calendar, and is available as the "o" standard pattern.
         /// </summary>
-        /// <remarks>
-        /// The minutes part of the offset is always included, but any sub-minute component
+        public static OffsetDateTimePattern ExtendedIso => ExtendedIsoPattern;
+
+        /// <summary>
+        /// Returns an invariant offset date/time pattern based on ISO-8601 (down to the tick), including offset from UTC.
+        /// The calendar system is not parsed or formatted as part of this pattern. It corresponds to a custom pattern of
+        /// "yyyy'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFFo&lt;G&gt;". This will round-trip any values
+        /// in the ISO calendar, and is available as the "o" standard pattern.
+        /// </summary>
+        [Obsolete("Use ExtendedIso for compatibility with 2.0")]
+        public static OffsetDateTimePattern ExtendedIsoPattern { get { return Patterns.ExtendedIsoPatternImpl; } }
+
+        /// <summary>
+        /// Returns an invariant offset date/time pattern based on RFC 3339 (down to the tick), including offset from UTC
+        /// as hours and minutes only. The minutes part of the offset is always included, but any sub-minute component
         /// of the offset is lost. An offset of zero is formatted as 'Z', but all of 'Z', '+00:00' and '-00:00' are parsed
         /// the same way. The RFC 3339 meaning of '-00:00' is not supported by Noda Time.
         /// Note that parsing is case-sensitive (so 'T' and 'Z' must be upper case).
         /// The calendar system is not parsed or formatted as part of this pattern. It corresponds to a custom pattern of
-        /// "uuuu'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFFFFo&lt;Z+HH:mm&gt;".
-        /// </remarks>
-        /// <value>An invariant offset date/time pattern based on RFC 3339 (down to the nanosecond), including offset from UTC
-        /// as hours and minutes only.</value>
-        public static OffsetDateTimePattern Rfc3339 => Patterns.Rfc3339PatternImpl;
+        /// "yyyy'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFFo&lt;Z+HH:mm&gt;".
+        /// </summary>
+        public static OffsetDateTimePattern Rfc3339 => Rfc3339Pattern;
 
         /// <summary>
-        /// Gets an invariant offset date/time pattern based on ISO-8601 (down to the nanosecond)
-        /// including offset from UTC and calendar ID.
+        /// Returns an invariant offset date/time pattern based on RFC 3339 (down to the tick), including offset from UTC
+        /// as hours and minutes only. The minutes part of the offset is always included, but any sub-minute component
+        /// of the offset is lost. An offset of zero is formatted as 'Z', but all of 'Z', '+00:00' and '-00:00' are parsed
+        /// the same way. The RFC 3339 meaning of '-00:00' is not supported by Noda Time.
+        /// Note that parsing is case-sensitive (so 'T' and 'Z' must be upper case).
+        /// The calendar system is not parsed or formatted as part of this pattern. It corresponds to a custom pattern of
+        /// "yyyy'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFFo&lt;Z+HH:mm&gt;".
         /// </summary>
-        /// <remarks>
-        /// The returned pattern corresponds to a custom pattern of
-        /// "uuuu'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFFFFo&lt;G&gt; '('c')'". This will round-trip any value in any calendar,
+        [Obsolete("Use Rfc3339 for compatibility with 2.0")]
+        public static OffsetDateTimePattern Rfc3339Pattern { get { return Patterns.Rfc3339PatternImpl; } }
+
+        /// <summary>
+        /// Returns an invariant offset date/time pattern based on ISO-8601 (down to the tick)
+        /// including offset from UTC and calendar ID. It corresponds to a custom pattern of
+        /// "yyyy'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFFo&lt;G&gt; '('c')'". This will round-trip any value in any calendar,
         /// and is available as the "r" standard pattern.
-        /// </remarks>
-        /// <value>An invariant offset date/time pattern based on ISO-8601 (down to the nanosecond)
-        /// including offset from UTC and calendar ID.</value>
-        public static OffsetDateTimePattern FullRoundtrip => Patterns.FullRoundtripPatternImpl;
+        /// </summary>
+        public static OffsetDateTimePattern FullRoundtrip => FullRoundtripPattern;
+
+        /// <summary>
+        /// Returns an invariant offset date/time pattern based on ISO-8601 (down to the tick)
+        /// including offset from UTC and calendar ID. It corresponds to a custom pattern of
+        /// "yyyy'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFFo&lt;G&gt; '('c')'". This will round-trip any value in any calendar,
+        /// and is available as the "r" standard pattern.
+        /// </summary>
+        [Obsolete("Use FullRoundtrip for compatibility with 2.0")]
+        public static OffsetDateTimePattern FullRoundtripPattern { get { return Patterns.FullRoundtripPatternImpl; } }
 
         /// <summary>
         /// Class whose existence is solely to avoid type initialization order issues, most of which stem
@@ -81,40 +104,40 @@ namespace NodaTime.Text
         /// </summary>
         internal static class Patterns
         {
-            internal static readonly OffsetDateTimePattern GeneralIsoPatternImpl = Create("uuuu'-'MM'-'dd'T'HH':'mm':'sso<G>", NodaFormatInfo.InvariantInfo, DefaultTemplateValue);
-            internal static readonly OffsetDateTimePattern ExtendedIsoPatternImpl = Create("uuuu'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFFFFo<G>", NodaFormatInfo.InvariantInfo, DefaultTemplateValue);
-            internal static readonly OffsetDateTimePattern Rfc3339PatternImpl = Create("uuuu'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFFFFo<Z+HH:mm>", NodaFormatInfo.InvariantInfo, DefaultTemplateValue);
-            internal static readonly OffsetDateTimePattern FullRoundtripPatternImpl = Create("uuuu'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFFFFo<G> '('c')'", NodaFormatInfo.InvariantInfo, DefaultTemplateValue);
+            internal static readonly OffsetDateTimePattern GeneralIsoPatternImpl = Create("yyyy'-'MM'-'dd'T'HH':'mm':'sso<G>", NodaFormatInfo.InvariantInfo, DefaultTemplateValue);
+            internal static readonly OffsetDateTimePattern ExtendedIsoPatternImpl = Create("yyyy'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFFo<G>", NodaFormatInfo.InvariantInfo, DefaultTemplateValue);
+            internal static readonly OffsetDateTimePattern Rfc3339PatternImpl = Create("yyyy'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFFo<Z+HH:mm>", NodaFormatInfo.InvariantInfo, DefaultTemplateValue);
+            internal static readonly OffsetDateTimePattern FullRoundtripPatternImpl = Create("yyyy'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFFo<G> '('c')'", NodaFormatInfo.InvariantInfo, DefaultTemplateValue);
             internal static readonly PatternBclSupport<OffsetDateTime> BclSupport = new PatternBclSupport<OffsetDateTime>("G", fi => fi.OffsetDateTimePatternParser);
         }
 
+        private readonly string patternText;
+        private readonly NodaFormatInfo formatInfo;
         private readonly IPattern<OffsetDateTime> pattern;
+        private readonly OffsetDateTime templateValue;
 
         /// <summary>
-        /// Gets the pattern text for this pattern, as supplied on creation.
+        /// Returns the pattern text for this pattern, as supplied on creation.
         /// </summary>
-        /// <value>The pattern text for this pattern, as supplied on creation.</value>
-        public string PatternText { get; }
+        public string PatternText { get { return patternText; } }
 
-        // Visible for testing
         /// <summary>
-        /// Gets the localization information used in this pattern.
+        /// Returns the localization information used in this pattern.
         /// </summary>
-        internal NodaFormatInfo FormatInfo { get; }
+        internal NodaFormatInfo FormatInfo { get { return formatInfo; } }
 
         /// <summary>
-        /// Gets the value used as a template for parsing: any field values unspecified
+        /// Returns the value used as a template for parsing: any field values unspecified
         /// in the pattern are taken from the template.
         /// </summary>
-        /// <value>The value used as a template for parsing.</value>
-        public OffsetDateTime TemplateValue { get; }
+        public OffsetDateTime TemplateValue { get { return templateValue; } }
 
         private OffsetDateTimePattern(string patternText, NodaFormatInfo formatInfo, OffsetDateTime templateValue,
             IPattern<OffsetDateTime> pattern)
         {
-            this.PatternText = patternText;
-            this.FormatInfo = formatInfo;
-            this.TemplateValue = templateValue;
+            this.patternText = patternText;
+            this.formatInfo = formatInfo;
+            this.templateValue = templateValue;
             this.pattern = pattern;
         }
 
@@ -127,23 +150,20 @@ namespace NodaTime.Text
         /// </remarks>
         /// <param name="text">The text value to parse.</param>
         /// <returns>The result of parsing, which may be successful or unsuccessful.</returns>
-        public ParseResult<OffsetDateTime> Parse([SpecialNullHandling] string text) => pattern.Parse(text);
+        public ParseResult<OffsetDateTime> Parse(string text)
+        {
+            return pattern.Parse(text);
+        }
 
         /// <summary>
-        /// Formats the given offset date/time as text according to the rules of this pattern.
+        /// Formats the given zoned date/time as text according to the rules of this pattern.
         /// </summary>
-        /// <param name="value">The offset date/time to format.</param>
-        /// <returns>The offset date/time formatted according to this pattern.</returns>
-        public string Format(OffsetDateTime value) => pattern.Format(value);
-
-        /// <summary>
-        /// Formats the given value as text according to the rules of this pattern,
-        /// appending to the given <see cref="StringBuilder"/>.
-        /// </summary>
-        /// <param name="value">The value to format.</param>
-        /// <param name="builder">The <c>StringBuilder</c> to append to.</param>
-        /// <returns>The builder passed in as <paramref name="builder"/>.</returns>
-        public StringBuilder AppendFormat(OffsetDateTime value, StringBuilder builder) => pattern.AppendFormat(value, builder);
+        /// <param name="value">The zoned date/time to format.</param>
+        /// <returns>The zoned date/time formatted according to this pattern.</returns>
+        public string Format(OffsetDateTime value)
+        {
+            return pattern.Format(value);
+        }
 
         /// <summary>
         /// Creates a pattern for the given pattern text, format info, and template value.
@@ -151,13 +171,12 @@ namespace NodaTime.Text
         /// <param name="patternText">Pattern text to create the pattern for</param>
         /// <param name="formatInfo">The format info to use in the pattern</param>
         /// <param name="templateValue">Template value to use for unspecified fields</param>
-        /// <returns>A pattern for parsing and formatting offset date/times.</returns>
+        /// <returns>A pattern for parsing and formatting zoned date/times.</returns>
         /// <exception cref="InvalidPatternException">The pattern text was invalid.</exception>
-        private static OffsetDateTimePattern Create(string patternText, NodaFormatInfo formatInfo,
-            OffsetDateTime templateValue)
+        private static OffsetDateTimePattern Create(string patternText, NodaFormatInfo formatInfo, OffsetDateTime templateValue)
         {
-            Preconditions.CheckNotNull(patternText, nameof(patternText));
-            Preconditions.CheckNotNull(formatInfo, nameof(formatInfo));
+            Preconditions.CheckNotNull(patternText, "patternText");
+            Preconditions.CheckNotNull(formatInfo, "formatInfo");
             var pattern = new OffsetDateTimePatternParser(templateValue).ParsePattern(patternText, formatInfo);
             return new OffsetDateTimePattern(patternText, formatInfo, templateValue, pattern);
         }
@@ -173,8 +192,10 @@ namespace NodaTime.Text
         /// <param name="templateValue">Template value to use for unspecified fields</param>
         /// <returns>A pattern for parsing and formatting local date/times.</returns>
         /// <exception cref="InvalidPatternException">The pattern text was invalid.</exception>
-        public static OffsetDateTimePattern Create(string patternText, [ValidatedNotNull] CultureInfo cultureInfo, OffsetDateTime templateValue) =>
-            Create(patternText, NodaFormatInfo.GetFormatInfo(cultureInfo), templateValue);
+        public static OffsetDateTimePattern Create(string patternText, CultureInfo cultureInfo, OffsetDateTime templateValue)
+        {
+            return Create(patternText, NodaFormatInfo.GetFormatInfo(cultureInfo), templateValue);
+        }
 
         /// <summary>
         /// Creates a pattern for the given pattern text in the invariant culture, using the default
@@ -186,8 +207,10 @@ namespace NodaTime.Text
         /// <param name="patternText">Pattern text to create the pattern for</param>
         /// <returns>A pattern for parsing and formatting local date/times.</returns>
         /// <exception cref="InvalidPatternException">The pattern text was invalid.</exception>
-        public static OffsetDateTimePattern CreateWithInvariantCulture(string patternText) =>
-            Create(patternText, NodaFormatInfo.InvariantInfo, DefaultTemplateValue);
+        public static OffsetDateTimePattern CreateWithInvariantCulture(string patternText)
+        {
+            return Create(patternText, NodaFormatInfo.InvariantInfo, DefaultTemplateValue);
+        }
 
         /// <summary>
         /// Creates a pattern for the given pattern text in the current culture, using the default
@@ -201,26 +224,32 @@ namespace NodaTime.Text
         /// <param name="patternText">Pattern text to create the pattern for</param>
         /// <returns>A pattern for parsing and formatting local date/times.</returns>
         /// <exception cref="InvalidPatternException">The pattern text was invalid.</exception>
-        public static OffsetDateTimePattern CreateWithCurrentCulture(string patternText) =>
-            Create(patternText, NodaFormatInfo.CurrentInfo, DefaultTemplateValue);
+        public static OffsetDateTimePattern CreateWithCurrentCulture(string patternText)
+        {
+            return Create(patternText, NodaFormatInfo.CurrentInfo, DefaultTemplateValue);
+        }
 
         /// <summary>
         /// Creates a pattern for the same original localization information as this pattern, but with the specified
         /// pattern text.
         /// </summary>
-        /// <param name="patternText">The pattern text to use in the new pattern.</param>
+        /// <param name="newPatternText">The pattern text to use in the new pattern.</param>
         /// <returns>A new pattern with the given pattern text.</returns>
-        public OffsetDateTimePattern WithPatternText(string patternText) =>
-            Create(patternText, FormatInfo, TemplateValue);
+        public OffsetDateTimePattern WithPatternText(string newPatternText)
+        {
+            return Create(newPatternText, formatInfo, templateValue);
+        }
 
         /// <summary>
         /// Creates a pattern for the same original pattern text as this pattern, but with the specified
         /// localization information.
         /// </summary>
-        /// <param name="formatInfo">The localization information to use in the new pattern.</param>
+        /// <param name="newFormatInfo">The localization information to use in the new pattern.</param>
         /// <returns>A new pattern with the given localization information.</returns>
-        private OffsetDateTimePattern WithFormatInfo(NodaFormatInfo formatInfo) =>
-            Create(PatternText, formatInfo, TemplateValue);
+        private OffsetDateTimePattern WithFormatInfo(NodaFormatInfo newFormatInfo)
+        {
+            return Create(patternText, newFormatInfo, templateValue);
+        }
 
         /// <summary>
         /// Creates a pattern for the same original pattern text as this pattern, but with the specified
@@ -228,8 +257,10 @@ namespace NodaTime.Text
         /// </summary>
         /// <param name="cultureInfo">The culture to use in the new pattern.</param>
         /// <returns>A new pattern with the given culture.</returns>
-        public OffsetDateTimePattern WithCulture([ValidatedNotNull] CultureInfo cultureInfo) =>
-            WithFormatInfo(NodaFormatInfo.GetFormatInfo(cultureInfo));
+        public OffsetDateTimePattern WithCulture(CultureInfo cultureInfo)
+        {
+            return WithFormatInfo(NodaFormatInfo.GetFormatInfo(cultureInfo));
+        }
 
         /// <summary>
         /// Creates a pattern for the same original pattern text and culture as this pattern, but with
@@ -237,25 +268,9 @@ namespace NodaTime.Text
         /// </summary>
         /// <param name="newTemplateValue">The template value to use in the new pattern.</param>
         /// <returns>A new pattern with the given template value.</returns>
-        public OffsetDateTimePattern WithTemplateValue(OffsetDateTime newTemplateValue) =>
-            Create(PatternText, FormatInfo, newTemplateValue);
-
-        /// <summary>
-        /// Creates a pattern like this one, but with the template value modified to use
-        /// the specified calendar system.
-        /// </summary>
-        /// <remarks>
-        /// <para>
-        /// Care should be taken in two (relatively rare) scenarios. Although the default template value
-        /// is supported by all Noda Time calendar systems, if a pattern is created with a different
-        /// template value and then this method is called with a calendar system which doesn't support that
-        /// date, an exception will be thrown. Additionally, if the pattern only specifies some date fields,
-        /// it's possible that the new template value will not be suitable for all values.
-        /// </para>
-        /// </remarks>
-        /// <param name="calendar">The calendar system to convert the template value into.</param>
-        /// <returns>A new pattern with a template value in the specified calendar system.</returns>
-        public OffsetDateTimePattern WithCalendar(CalendarSystem calendar) =>
-            WithTemplateValue(TemplateValue.WithCalendar(calendar));
+        public OffsetDateTimePattern WithTemplateValue(OffsetDateTime newTemplateValue)
+        {
+            return Create(patternText, formatInfo, newTemplateValue);
+        }
     }
 }

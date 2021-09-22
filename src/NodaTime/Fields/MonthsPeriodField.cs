@@ -2,6 +2,7 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
+using System;
 using NodaTime.Calendars;
 
 namespace NodaTime.Fields
@@ -9,21 +10,30 @@ namespace NodaTime.Fields
     /// <summary>
     /// Period field which uses a <see cref="YearMonthDayCalculator" /> to add/subtract months.
     /// </summary>
-    internal sealed class MonthsPeriodField : IDatePeriodField
+    internal sealed class MonthsPeriodField : IPeriodField
     {
-        internal MonthsPeriodField()
+        private readonly YearMonthDayCalculator calculator;
+
+        internal MonthsPeriodField(YearMonthDayCalculator calculator)
         {
+            this.calculator = calculator;
         }
 
-        public LocalDate Add(LocalDate localDate, int value)
+        public LocalInstant Add(LocalInstant localInstant, long value)
         {
-            var calendar = localDate.Calendar;
-            var calculator = calendar.YearMonthDayCalculator;
-            var yearMonthDay = calculator.AddMonths(localDate.YearMonthDay, value);
-            return new LocalDate(yearMonthDay.WithCalendar(calendar));
+            // We don't try to work out the actual bounds, but we can easily tell
+            // that we're out of range. Anything not in the range of an int is definitely broken.
+            if (value < Int32.MinValue || value > Int32.MaxValue)
+            {
+                throw new ArgumentOutOfRangeException("value");
+            }
+
+            return calculator.AddMonths(localInstant, (int)value);
         }
 
-        public int UnitsBetween(LocalDate start, LocalDate end) =>
-            start.Calendar.YearMonthDayCalculator.MonthsBetween(start.YearMonthDay, end.YearMonthDay);
+        public long Subtract(LocalInstant minuendInstant, LocalInstant subtrahendInstant)
+        {
+            return calculator.MonthsBetween(minuendInstant, subtrahendInstant);
+        }
     }
 }

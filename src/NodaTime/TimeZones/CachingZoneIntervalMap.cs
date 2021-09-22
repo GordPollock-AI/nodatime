@@ -2,8 +2,8 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using NodaTime.Utility;
 using System;
+using NodaTime.Utility;
 
 namespace NodaTime.TimeZones
 {
@@ -12,15 +12,26 @@ namespace NodaTime.TimeZones
     /// </summary>
     internal static class CachingZoneIntervalMap
     {
-        // Currently the only implementation is HashArrayCache. This container class is mostly for historical
-        // reasons; it's not really necessary but it does no harm.
+        /// <summary>
+        /// The type of cache to build.
+        /// </summary>
+        internal enum CacheType
+        {
+            Hashtable
+        }
 
         /// <summary>
         /// Returns a caching map for the given input map.
         /// </summary>
-        internal static IZoneIntervalMap CacheMap(IZoneIntervalMap map)
+        internal static IZoneIntervalMap CacheMap(IZoneIntervalMap map, CacheType type)
         {
-            return new HashArrayCache(map);
+            switch (type)
+            {
+                case CacheType.Hashtable:
+                    return new HashArrayCache(map);
+                default:
+                    throw new ArgumentException("The type parameter is invalid", "type");
+            }
         }
 
         #region Nested type: HashArrayCache
@@ -30,7 +41,7 @@ namespace NodaTime.TimeZones
         /// </summary>
         /// <remarks>
         /// Each hash table entry is either entry or contains a node with enough
-        /// information for a particular "period" of 32 days - so multiple calls for time
+        /// information for a particular "period" of about 40 days - so multiple calls for time
         /// zone information within the same few years are likely to hit the cache. Note that
         /// a single "period" may include a daylight saving change (or conceivably more than one);
         /// a node therefore has to contain enough intervals to completely represent that period.
@@ -49,17 +60,17 @@ namespace NodaTime.TimeZones
             private const int CachePeriodMask = CacheSize - 1;
 
             /// <summary>
-            /// Defines the number of bits to shift an instant's "days since epoch" to get the period. This
-            /// converts an instant into a number of 32 day periods.
+            /// Defines the number of bits to shift an instant value to get the period. This
+            /// converts a number of ticks to a number of 40.6 days periods.
             /// </summary>
-            private const int PeriodShift = 5;
+            private const int PeriodShift = 45;
 
             private readonly HashCacheNode[] instantCache;
             private readonly IZoneIntervalMap map;
 
             internal HashArrayCache(IZoneIntervalMap map)
             {
-                this.map = Preconditions.CheckNotNull(map, nameof(map));
+                this.map = Preconditions.CheckNotNull(map, "map");
                 instantCache = new HashCacheNode[CacheSize];
             }
 
@@ -71,10 +82,10 @@ namespace NodaTime.TimeZones
             /// <returns>The defined ZoneOffsetPeriod or null.</returns>
             public ZoneInterval GetZoneInterval(Instant instant)
             {
-                int period = instant.DaysSinceEpoch >> PeriodShift;
+                int period = (int)(instant.Ticks >> PeriodShift);
                 int index = period & CachePeriodMask;
                 var node = instantCache[index];
-                if (node is null || node.Period != period)
+                if (node == null || node.Period != period)
                 {
                     node = HashCacheNode.CreateNode(period, map);
                     instantCache[index] = node;
@@ -82,7 +93,7 @@ namespace NodaTime.TimeZones
 
                 // Note: moving this code into an instance method in HashCacheNode makes a surprisingly
                 // large performance difference.
-                while (node.Previous != null && node.Interval.RawStart > instant)
+                while (node.Interval.Start > instant)
                 {
                     node = node.Previous;
                 }
@@ -95,11 +106,14 @@ namespace NodaTime.TimeZones
             // than two zone intervals in a period. It halved the performance...
             private sealed class HashCacheNode
             {
-                internal ZoneInterval Interval { get; }
+                private readonly ZoneInterval interval;
+                internal ZoneInterval Interval { get { return interval; } }
 
-                internal int Period { get; }
+                private readonly int period;
+                internal int Period { get { return period; } }
 
-                internal HashCacheNode? Previous { get; }
+                private readonly HashCacheNode previous;
+                internal HashCacheNode Previous { get { return previous; } }
 
                 /// <summary>
                 /// Creates a hash table node with all the information for this period.
@@ -110,19 +124,14 @@ namespace NodaTime.TimeZones
                 /// </summary>
                 internal static HashCacheNode CreateNode(int period, IZoneIntervalMap map)
                 {
-                    var days = period << PeriodShift;
-                    var periodStart = Instant.FromTrustedDuration(new Duration(Math.Max(days, Instant.MinDays), 0L));
-                    var nextPeriodStartDays = days + (1 << PeriodShift);
+                    var periodStart = new Instant((long)period << PeriodShift);
+                    var periodEnd = new Instant((long)(period + 1) << PeriodShift);
 
                     var interval = map.GetZoneInterval(periodStart);
                     var node = new HashCacheNode(interval, period, null);
 
                     // Keep going while the current interval ends before the period.
-                    // (We only need to check the days, as every period lands on a
-                    // day boundary.)
-                    // If the raw end is the end of time, the condition will definitely
-                    // evaluate to false.
-                    while (interval.RawEnd.DaysSinceEpoch < nextPeriodStartDays)
+                    while (interval.End < periodEnd)
                     {
                         interval = map.GetZoneInterval(interval.End);
                         node = new HashCacheNode(interval, period, node);
@@ -137,11 +146,11 @@ namespace NodaTime.TimeZones
                 /// <param name="interval">The zone interval.</param>
                 /// <param name="period"></param>
                 /// <param name="previous">The previous <see cref="HashCacheNode"/> node.</param>
-                private HashCacheNode(ZoneInterval interval, int period, HashCacheNode? previous)
+                private HashCacheNode(ZoneInterval interval, int period, HashCacheNode previous)
                 {
-                    this.Period = period;
-                    this.Interval = interval;
-                    this.Previous = previous;
+                    this.period = period;
+                    this.interval = interval;
+                    this.previous = previous;
                 }
             }
             #endregion

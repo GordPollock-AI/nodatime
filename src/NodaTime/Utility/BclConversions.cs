@@ -10,10 +10,12 @@ namespace NodaTime.Utility
     /// Conversion methods which don't naturally fit into any other types - for example, for
     /// enums which can't specify any other code. In most cases, conversions to and from BCL types
     /// are provided within the type itself - such as <see cref="LocalDateTime.ToDateTimeUnspecified"/>
-    /// and <see cref="LocalDateTime.FromDateTime(System.DateTime)"/>.
+    /// and <see cref="LocalDateTime.FromDateTime"/>.
     /// </summary>
     /// <remarks>
-    /// These methods are also available in the form of extension methods in the <c>NodaTime.Extensions</c> namespace.
+    /// Many of the methods within this class could be expressed as extension methods - but currently
+    /// Noda Time always builds against .NET 2. In a future version, there may be multiple build targets,
+    /// allowing these to become extension methods for the builds which use .NET 3.5 and higher.
     /// </remarks>
     /// <threadsafety>All members of this type are thread-safe. See the thread safety section of the user guide for more information.</threadsafety>
     public static class BclConversions
@@ -31,9 +33,9 @@ namespace NodaTime.Utility
         {
             if (isoDayOfWeek < IsoDayOfWeek.Monday || isoDayOfWeek > IsoDayOfWeek.Sunday)
             {
-                throw new ArgumentOutOfRangeException(nameof(isoDayOfWeek));
+                throw new ArgumentOutOfRangeException("isoDayOfWeek");
             }
-            return isoDayOfWeek == IsoDayOfWeek.Sunday ? DayOfWeek.Sunday : (DayOfWeek) isoDayOfWeek;
+            return isoDayOfWeek == IsoDayOfWeek.Sunday ? DayOfWeek.Sunday : (DayOfWeek)isoDayOfWeek;
         }
 
         /// <summary>
@@ -49,9 +51,9 @@ namespace NodaTime.Utility
         {
             if (dayOfWeek < DayOfWeek.Sunday || dayOfWeek > DayOfWeek.Saturday)
             {
-                throw new ArgumentOutOfRangeException(nameof(dayOfWeek));
+                throw new ArgumentOutOfRangeException("dayOfWeek");
             }
-            return dayOfWeek == DayOfWeek.Sunday ? IsoDayOfWeek.Sunday : (IsoDayOfWeek) dayOfWeek;
+            return dayOfWeek == DayOfWeek.Sunday ? IsoDayOfWeek.Sunday : (IsoDayOfWeek)dayOfWeek;
         }
     }
 }

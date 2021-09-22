@@ -2,10 +2,10 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using NodaTime.Utility;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using NodaTime.Utility;
 
 namespace NodaTime.TimeZones.IO
 {
@@ -16,46 +16,13 @@ namespace NodaTime.TimeZones.IO
     /// </summary>
     internal sealed class DateTimeZoneReader : IDateTimeZoneReader
     {
-        /// <summary>
-        /// Raw stream to read from. Be careful before reading from this - you need to take
-        /// account of bufferedByte as well.
-        /// </summary>
         private readonly Stream input;
+        private readonly IList<string> stringPool; 
 
-        /// <summary>
-        /// String pool to use, or null if no string pool is in use.
-        /// </summary>
-        private readonly IReadOnlyList<string>? stringPool;
-
-        /// <summary>
-        /// Sometimes we need to buffer a byte in memory, e.g. to check if there is any
-        /// more data. Anything reading directly from the stream should check here first.
-        /// </summary>
-        private byte? bufferedByte;
-
-        internal DateTimeZoneReader(Stream input, IReadOnlyList<string>? stringPool)
+        internal DateTimeZoneReader(Stream input, IList<string> stringPool)
         {
             this.input = input;
             this.stringPool = stringPool;
-        }
-
-        public bool HasMoreData
-        {
-            get
-            {
-                if (bufferedByte != null)
-                {
-                    return true;
-                }
-                int nextByte = input.ReadByte();
-                if (nextByte == -1)
-                {
-                    return false;
-                }
-                // Okay, we got a byte - remember it for the next call to ReadByte.
-                bufferedByte = (byte) nextByte;
-                return true;
-            }
         }
 
         /// <summary>
@@ -116,13 +83,13 @@ namespace NodaTime.TimeZones.IO
         }
 
         /// <summary>
-        /// Reads a number of milliseconds from the stream.
+        /// Reads an offset value from the stream.
         /// </summary>
         /// <remarks>
-        /// The value must have been written by <see cref="DateTimeZoneWriter.WriteMilliseconds" />.
+        /// The value must have been written by <see cref="DateTimeZoneWriter.WriteOffset" />.
         /// </remarks>
         /// <returns>The offset value from the stream.</returns>
-        public int ReadMilliseconds()
+        public Offset ReadOffset()
         {
             unchecked
             {
@@ -152,25 +119,12 @@ namespace NodaTime.TimeZones.IO
                             millis = (firstData << 24) + (ReadByte() << 16) + (ReadInt16() & 0xffff);
                             break;
                         default:
-                            throw new InvalidNodaDataException($"Invalid flag in offset: {flag:x2}");
+                            throw new InvalidNodaDataException("Invalid flag in offset: " + flag.ToString("x2"));
                     }
                 }
-                millis -= NodaConstants.MillisecondsPerDay;
-                return millis;
+                millis -= NodaConstants.MillisecondsPerStandardDay;
+                return Offset.FromMilliseconds(millis);
             }
-        }
-
-        /// <summary>
-        /// Reads an offset value from the stream.
-        /// </summary>
-        /// <remarks>
-        /// The value must have been written by <see cref="DateTimeZoneWriter.WriteOffset" />.
-        /// </remarks>
-        /// <returns>The offset value from the stream.</returns>
-        public Offset ReadOffset()
-        {
-            int millis = ReadMilliseconds();
-            return Offset.FromMilliseconds(millis);
         }
 
         /// <summary>
@@ -192,7 +146,7 @@ namespace NodaTime.TimeZones.IO
             }
             return results;
         }
-
+        
         /// <summary>
         /// Reads an instant representing a zone interval transition from the stream.
         /// </summary>
@@ -209,20 +163,24 @@ namespace NodaTime.TimeZones.IO
                 int value = ReadCount();
                 if (value < DateTimeZoneWriter.ZoneIntervalConstants.MinValueForHoursSincePrevious)
                 {
-                    return value switch
+                    switch (value)
                     {
-                        DateTimeZoneWriter.ZoneIntervalConstants.MarkerMinValue => Instant.BeforeMinValue,
-                        DateTimeZoneWriter.ZoneIntervalConstants.MarkerMaxValue => Instant.AfterMaxValue,
-                        DateTimeZoneWriter.ZoneIntervalConstants.MarkerRaw => Instant.FromUnixTimeTicks(ReadInt64()),
-                        _ => throw new InvalidNodaDataException($"Unrecognised marker value: {value}")
-                    };
+                        case DateTimeZoneWriter.ZoneIntervalConstants.MarkerMinValue:
+                            return Instant.MinValue;
+                        case DateTimeZoneWriter.ZoneIntervalConstants.MarkerMaxValue:
+                            return Instant.MaxValue;
+                        case DateTimeZoneWriter.ZoneIntervalConstants.MarkerRaw:
+                            return new Instant(ReadInt64());
+                        default: 
+                            throw new InvalidNodaDataException("Unrecognised marker value: " + value);
+                    }
                 }
                 if (value < DateTimeZoneWriter.ZoneIntervalConstants.MinValueForMinutesSinceEpoch)
                 {
-                    if (previous is null)
+                    if (previous == null)
                     {
                         throw new InvalidNodaDataException(
-                            $"No previous value, so can't interpret value encoded as delta-since-previous: {value}");
+                            "No previous value, so can't interpret value encoded as delta-since-previous: " + value);
                     }
                     return (Instant) previous + Duration.FromHours(value);
                 }
@@ -239,19 +197,17 @@ namespace NodaTime.TimeZones.IO
         /// <returns>The string value from the stream.</returns>
         public string ReadString()
         {
-            if (stringPool is null)
+            if (stringPool == null)
             {
-                // This will flush the buffered byte if there is one, so we don't need to worry about that
-                // when reading the actual data.
                 int length = ReadCount();
                 var data = new byte[length];
                 int offset = 0;
                 while (offset < length)
                 {
-                    int bytesRead = input.Read(data, offset, length - offset);
+                    int bytesRead = input.Read(data, 0, length);
                     if (bytesRead <= 0)
                     {
-                        throw new InvalidNodaDataException($"Unexpectedly reached end of data with {length - offset} bytes still to read");
+                        throw new InvalidNodaDataException("Unexpectedly reached end of data with " + (length - offset) + " bytes still to read");
                     }
                     offset += bytesRead;
                 }
@@ -314,18 +270,12 @@ namespace NodaTime.TimeZones.IO
         /// <inheritdoc />
         public byte ReadByte()
         {
-            if (bufferedByte != null)
-            {
-                byte ret = bufferedByte.Value;
-                bufferedByte = null;
-                return ret;
-            }
             int value = input.ReadByte();
             if (value == -1)
             {
                 throw new InvalidNodaDataException("Unexpected end of data stream");
             }
-            return (byte) value;
+            return (byte)value;
         }
     }
 }

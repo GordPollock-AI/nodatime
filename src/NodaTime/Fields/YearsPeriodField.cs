@@ -10,46 +10,47 @@ namespace NodaTime.Fields
     /// <summary>
     /// Period field which uses a <see cref="YearMonthDayCalculator" /> to add/subtract years.
     /// </summary>
-    internal sealed class YearsPeriodField : IDatePeriodField
+    internal sealed class YearsPeriodField : IPeriodField
     {
-        internal YearsPeriodField()
+        private readonly YearMonthDayCalculator calculator;
+
+        internal YearsPeriodField(YearMonthDayCalculator calculator)
         {
+            this.calculator = calculator;
         }
 
-        public LocalDate Add(LocalDate localDate, int value)
+        public LocalInstant Add(LocalInstant localInstant, long value)
         {
-            if (value == 0)
-            {
-                return localDate;
-            }
-            YearMonthDay yearMonthDay = localDate.YearMonthDay;
-            var calendar = localDate.Calendar;
-            var calculator = calendar.YearMonthDayCalculator;
-            int currentYear = yearMonthDay.Year;
+            int currentYear = calculator.GetYear(localInstant);
             // Adjust argument range based on current year
-            Preconditions.CheckArgumentRange(nameof(value), value, calculator.MinYear - currentYear, calculator.MaxYear - currentYear);
-            return new LocalDate(calculator.SetYear(yearMonthDay, currentYear + value).WithCalendarOrdinal(calendar.Ordinal));
+            Preconditions.CheckArgumentRange("value", value, calculator.MinYear - currentYear, calculator.MaxYear - currentYear);
+            // If we got this far, the conversion to int must be fine.
+            int intValue = (int)value;
+            return calculator.SetYear(localInstant, intValue + currentYear);
         }
 
-        public int UnitsBetween(LocalDate start, LocalDate end)
+        public long Subtract(LocalInstant minuendInstant, LocalInstant subtrahendInstant)
         {
-            int diff = end.Year - start.Year;
+            int minuendYear = calculator.GetYear(minuendInstant);
+            int subtrahendYear = calculator.GetYear(subtrahendInstant);
+
+            int diff = minuendYear - subtrahendYear;
 
             // If we just add the difference in years to subtrahendInstant, what do we get?
-            LocalDate simpleAddition = Add(start, diff);
+            LocalInstant simpleAddition = Add(subtrahendInstant, diff);
 
-            if (start <= end)
+            if (subtrahendInstant <= minuendInstant)
             {
-                // Moving forward: if the result of the simple addition is before or equal to the end,
+                // Moving forward: if the result of the simple addition is before or equal to the minuend,
                 // we're done. Otherwise, rewind a year because we've overshot.
-                return simpleAddition <= end ? diff : diff - 1;
+                return simpleAddition <= minuendInstant ? diff : diff - 1;
             }
             else
             {
                 // Moving backward: if the result of the simple addition (of a non-positive number)
-                // is after or equal to the end, we're done. Otherwise, increment by a year because
+                // is after or equal to the minuend, we're done. Otherwise, increment by a year because
                 // we've overshot backwards.
-                return simpleAddition >= end ? diff : diff + 1;
+                return simpleAddition >= minuendInstant ? diff : diff + 1;
             }
         }
     }

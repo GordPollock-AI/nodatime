@@ -2,11 +2,10 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using NodaTime.Annotations;
-using NodaTime.Utility;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using NodaTime.Utility;
 
 namespace NodaTime.TimeZones.IO
 {
@@ -15,22 +14,26 @@ namespace NodaTime.TimeZones.IO
     /// </summary>
     internal sealed class TzdbStreamField
     {
+        private readonly TzdbStreamFieldId id;
         private readonly byte[] data;
-        internal TzdbStreamFieldId Id { get; }
 
-        [VisibleForTesting]
-        internal TzdbStreamField(TzdbStreamFieldId id, byte[] data)
+        private TzdbStreamField(TzdbStreamFieldId id, byte[] data)
         {
-            this.Id = id;
+            this.id = id;
             this.data = data;
         }
+
+        internal TzdbStreamFieldId Id { get { return id; } }
 
         /// <summary>
         /// Creates a new read-only stream over the data for this field.
         /// </summary>
-        internal Stream CreateStream() => new MemoryStream(data, false);
+        internal Stream CreateStream()
+        {
+            return new MemoryStream(data, false);
+        }
 
-        internal T ExtractSingleValue<T>(Func<DateTimeZoneReader, T> readerFunction, IReadOnlyList<string>? stringPool)
+        internal T ExtractSingleValue<T>(Func<DateTimeZoneReader, T> readerFunction, IList<string> stringPool)
         {
             using (var stream = CreateStream())
             {
@@ -57,7 +60,7 @@ namespace NodaTime.TimeZones.IO
                     int bytesRead = input.Read(data, offset, data.Length - offset);
                     if (bytesRead == 0)
                     {
-                        throw new InvalidNodaDataException($"Stream ended after reading {offset} bytes out of {data.Length}");
+                        throw new InvalidNodaDataException("Stream ended after reading " + offset + " bytes out of " + data.Length);
                     }
                     offset += bytesRead;
                 }

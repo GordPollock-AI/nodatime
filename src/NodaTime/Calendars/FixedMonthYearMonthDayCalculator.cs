@@ -2,6 +2,9 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
+using System.Collections.Generic;
+using NodaTime.Utility;
+
 namespace NodaTime.Calendars
 {
     /// <summary>
@@ -16,33 +19,79 @@ namespace NodaTime.Calendars
     {
         private const int DaysInMonth = 30;
 
-        private const int AverageDaysPer10Years = 3653; // Ideally 365.25 days per year...
+        // Number of ticks in all but the "short" month.
+        private const long TicksPerMonth = DaysInMonth * NodaConstants.TicksPerStandardDay;
 
-        protected FixedMonthYearMonthDayCalculator(int minYear, int maxYear, int daysAtStartOfYear1)
-            : base(minYear, maxYear, 13, AverageDaysPer10Years, daysAtStartOfYear1)
+        private const long AverageTicksPerYear = (long)(365.25 * NodaConstants.TicksPerStandardDay);
+
+        protected FixedMonthYearMonthDayCalculator(int minYear, int maxYear,
+            long ticksAtStartOfYear1, params Era[] eras)
+            : base(minYear, maxYear, 13, AverageTicksPerYear, ticksAtStartOfYear1, eras)
         {
         }
 
-        internal override int GetDaysSinceEpoch(YearMonthDay yearMonthDay) =>
-            // Just inline the arithmetic that would be done via various methods.
-            GetStartOfYearInDays(yearMonthDay.Year)
-                   + (yearMonthDay.Month - 1) * DaysInMonth
-                   + (yearMonthDay.Day - 1);
-
-        protected override int GetDaysFromStartOfYearToStartOfMonth(int year, int month) => (month - 1) * DaysInMonth;
-
-        internal override bool IsLeapYear(int year) => (year & 3) == 3;
-
-        internal override int GetDaysInYear(int year) => IsLeapYear(year) ? 366 : 365;
-
-        internal override int GetDaysInMonth(int year, int month) => month != 13 ? DaysInMonth : IsLeapYear(year) ? 6 : 5;
-
-        internal override YearMonthDay GetYearMonthDay(int year, int dayOfYear)
+        internal override LocalInstant SetYear(LocalInstant localInstant, int year)
         {
-            int zeroBasedDayOfYear = dayOfYear - 1;
-            int month = zeroBasedDayOfYear / DaysInMonth + 1;
-            int day = zeroBasedDayOfYear % DaysInMonth + 1;
-            return new YearMonthDay(year, month, day);
+            // Optimized implementation of set, due to fixed months
+            int thisYear = GetYear(localInstant);
+            int dayOfYear = GetDayOfYear(localInstant, thisYear);
+            long tickOfDay = TimeOfDayCalculator.GetTickOfDay(localInstant);
+
+            if (dayOfYear > 365)
+            {
+                // Current year is leap, and day is leap.
+                if (!IsLeapYear(year))
+                {
+                    // Moving to a non-leap year, leap day doesn't exist.
+                    dayOfYear--;
+                }
+            }
+
+            long ticks = GetStartOfYearInTicks(year) + (dayOfYear - 1) * NodaConstants.TicksPerStandardDay + tickOfDay;
+            return new LocalInstant(ticks);
+        }
+
+        internal override LocalInstant GetLocalInstant(int year, int monthOfYear, int dayOfMonth)
+        {
+            Preconditions.CheckArgumentRange("year", year, MinYear, MaxYear);
+            Preconditions.CheckArgumentRange("monthOfYear", monthOfYear, 1, 13);
+            Preconditions.CheckArgumentRange("dayOfMonth", dayOfMonth, 1, GetDaysInMonth(year, monthOfYear));
+
+            // Just inline the arithmetic that would be done via various methods.
+            int days = GetStartOfYearInDays(year) + (monthOfYear - 1) * DaysInMonth + (dayOfMonth - 1);
+            return new LocalInstant(days * NodaConstants.TicksPerStandardDay);
+        }
+        
+        protected override long GetTicksFromStartOfYearToStartOfMonth(int year, int month)
+        {
+            return (month - 1) * TicksPerMonth;
+        }
+
+        internal override int GetDayOfMonth(LocalInstant localInstant)
+        {
+            // Optimized for fixed months
+            return (GetDayOfYear(localInstant) - 1) % DaysInMonth + 1;
+        }
+
+        internal override bool IsLeapYear(int year)
+        {
+            return (year & 3) == 3;
+        }
+
+        internal override int GetDaysInMonth(int year, int month)
+        {
+            return month != 13 ? DaysInMonth : IsLeapYear(year) ? 6 : 5;
+        }
+
+        internal override int GetMonthOfYear(LocalInstant localInstant)
+        {
+            return (GetDayOfYear(localInstant) - 1) / DaysInMonth + 1;
+        }
+
+        protected override int GetMonthOfYear(LocalInstant localInstant, int year)
+        {
+            long monthZeroBased = (localInstant.Ticks - GetStartOfYearInTicks(year)) / TicksPerMonth;
+            return ((int)monthZeroBased) + 1;
         }
     }
 }

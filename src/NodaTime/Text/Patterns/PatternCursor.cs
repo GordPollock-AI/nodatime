@@ -2,25 +2,16 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using System.Globalization;
 using System.Text;
+using NodaTime.Properties;
 
 namespace NodaTime.Text.Patterns
 {
     /// <summary>
-    /// Extends <see cref="TextCursor"/> to simplify parsing patterns such as "uuuu-MM-dd".
+    /// Extends <see cref="TextCursor"/> to simplify parsing patterns such as "yyyy-MM-dd".
     /// </summary>
     internal sealed class PatternCursor : TextCursor
     {
-        /// <summary>
-        /// The character signifying the start of an embedded pattern.
-        /// </summary>
-        internal const char EmbeddedPatternStart = '<';
-        /// <summary>
-        /// The character signifying the end of an embedded pattern.
-        /// </summary>
-        internal const char EmbeddedPatternEnd = '>';
-
         internal PatternCursor(string pattern)
             : base(pattern)
         {
@@ -48,14 +39,14 @@ namespace NodaTime.Text.Patterns
                 {
                     if (!MoveNext())
                     {
-                        throw new InvalidPatternException(TextErrorMessages.EscapeAtEndOfString);
+                        throw new InvalidPatternException(Messages.Parse_EscapeAtEndOfString);
                     }
                 }
                 builder.Append(Current);
             }
             if (!endQuoteFound)
             {
-                throw new InvalidPatternException(TextErrorMessages.MissingEndQuote, closeQuote);
+                throw new InvalidPatternException(Messages.Parse_MissingEndQuote, closeQuote);
             }
             MovePrevious();
             return builder.ToString();
@@ -66,7 +57,7 @@ namespace NodaTime.Text.Patterns
         /// repeated sequence.
         /// </summary>
         /// <param name="maximumCount">The maximum number of repetitions allowed.</param>
-        /// <returns>The repetition count which is always at least <c>1</c>.</returns>
+        /// <returns>The repetition count which is alway at least <c>1</c>.</returns>
         internal int GetRepeatCount(int maximumCount)
         {
             char patternCharacter = Current;
@@ -79,7 +70,7 @@ namespace NodaTime.Text.Patterns
             MovePrevious();
             if (repeatLength > maximumCount)
             {
-                throw new InvalidPatternException(TextErrorMessages.RepeatCountExceeded, patternCharacter, maximumCount);
+                throw new InvalidPatternException(Messages.Parse_RepeatCountExceeded, patternCharacter, maximumCount);
             }
             return repeatLength;
         }
@@ -89,46 +80,34 @@ namespace NodaTime.Text.Patterns
         /// </summary>
         /// <remarks>
         /// <para>
-        /// The cursor is expected to be positioned immediately before the <see cref="EmbeddedPatternStart"/> character (<c>&lt;</c>),
-        /// and on success the cursor will be positioned on the <see cref="EmbeddedPatternEnd" /> character (<c>&gt;</c>).
+        /// The cursor is expected to be positioned before the <paramref name="startPattern"/> character,
+        /// and onsuccess the cursor will be positioned on the <paramref name="endPattern"/> character.
         /// </para>
         /// <para>Quote characters (' and ") and escaped characters (escaped with a backslash) are handled
-        /// but not unescaped: the resulting pattern should be ready for parsing as normal. It is assumed that the
-        /// embedded pattern will itself handle embedded patterns, so if the input is on the first <c>&lt;</c>
-        /// of <c>"before &lt;outer1 &lt;inner&gt; outer2&gt; after"</c>
-        /// this method will return <c>"outer1 &lt;inner&gt; outer2"</c> and the cursor will be positioned
-        /// on the final <c>&gt;</c> afterwards.
-        /// </para>
+        /// but not unescaped: the resulting pattern should be ready for parsing as normal.</para>
         /// </remarks>
+        /// <param name="startPattern">The character expected to start the pattern.</param>
+        /// <param name="endPattern">The character expected to end the pattern.</param>
         /// <returns>The embedded pattern, not including the start/end pattern characters.</returns>
-        internal string GetEmbeddedPattern()
+        internal string GetEmbeddedPattern(char startPattern, char endPattern)
         {
-            if (!MoveNext() || Current != EmbeddedPatternStart)
+            if (!MoveNext() || Current != startPattern)
             {
-                throw new InvalidPatternException(string.Format(CultureInfo.CurrentCulture, TextErrorMessages.MissingEmbeddedPatternStart, EmbeddedPatternStart));
+                throw new InvalidPatternException(string.Format(Messages.Parse_MissingEmbeddedPatternStart, startPattern));
             }
             int startIndex = Index + 1;
-            int depth = 1; // For nesting
             while (MoveNext())
             {
                 char current = Current;
-                if (current == EmbeddedPatternEnd)
+                if (current == endPattern)
                 {
-                    depth--;
-                    if (depth == 0)
-                    {
-                        return Value.Substring(startIndex, Index - startIndex);
-                    }
+                    return Value.Substring(startIndex, Index - startIndex);
                 }
-                else if (current == EmbeddedPatternStart)
-                {
-                    depth++;
-                }
-                else if (current == '\\')
+                if (current == '\\')
                 {
                     if (!MoveNext())
                     {
-                        throw new InvalidPatternException(TextErrorMessages.EscapeAtEndOfString);
+                        throw new InvalidPatternException(Messages.Parse_EscapeAtEndOfString);
                     }
                 }
                 else if (current == '\'' || current == '\"')
@@ -139,7 +118,7 @@ namespace NodaTime.Text.Patterns
                 }
             }
             // We've reached the end of the enclosing pattern without reaching the end of the embedded pattern. Oops.
-            throw new InvalidPatternException(string.Format(CultureInfo.CurrentCulture, TextErrorMessages.MissingEmbeddedPatternEnd, EmbeddedPatternEnd));
+            throw new InvalidPatternException(string.Format(Messages.Parse_MissingEmbeddedPatternEnd, endPattern));
         }
     }
 }

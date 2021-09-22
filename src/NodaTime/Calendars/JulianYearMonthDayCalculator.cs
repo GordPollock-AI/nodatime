@@ -6,14 +6,17 @@ namespace NodaTime.Calendars
 {
     internal sealed class JulianYearMonthDayCalculator : GJYearMonthDayCalculator
     {
-        private const int AverageDaysPer10JulianYears = 3653; // Ideally 365.25 per year
+        private const long AverageTicksPerJulianYear = (long)(365.25m * NodaConstants.TicksPerStandardDay);
 
         internal JulianYearMonthDayCalculator()
-            : base(-9997, 9998, AverageDaysPer10JulianYears, -719164)
+            : base(-27256, 31196, AverageTicksPerJulianYear, -621357696000000000L)
         {
         }
 
-        internal override bool IsLeapYear(int year) => (year & 3) == 0;
+        internal override bool IsLeapYear(int year)
+        {
+            return (year & 3) == 0;
+        }
 
         protected override int CalculateStartOfYearDays(int year)
         {

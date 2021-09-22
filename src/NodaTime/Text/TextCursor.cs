@@ -3,6 +3,7 @@
 // as found in the LICENSE.txt file.
 
 using System.Diagnostics;
+using System.Text;
 
 namespace NodaTime.Text
 {
@@ -16,15 +17,8 @@ namespace NodaTime.Text
     [DebuggerStepThrough]
     internal abstract class TextCursor
     {
-        /// <summary>
-        /// Gets the length of the string being parsed.
-        /// </summary>
-        internal int Length { get; }
-
-        /// <summary>
-        /// Gets the string being parsed.
-        /// </summary>
-        internal string Value { get; }
+        private readonly string value;
+        private readonly int length;
 
         /// <summary>
         /// A nul character. This character is not allowed in any parsable string and is used to
@@ -38,8 +32,8 @@ namespace NodaTime.Text
         protected TextCursor(string value)
         {
             // Validated by caller.
-            this.Value = value;
-            this.Length = value.Length;
+            this.value = value;
+            this.length = value.Length;
             Move(-1);
         }
 
@@ -54,7 +48,7 @@ namespace NodaTime.Text
         /// <value>
         /// <c>true</c> if this instance has more characters; otherwise, <c>false</c>.
         /// </value>
-        internal bool HasMoreCharacters => unchecked(Index + 1) < Length;
+        internal bool HasMoreCharacters { get { unchecked { return Index + 1 < Length; } } }
 
         /// <summary>
         /// Gets the current index into the string being parsed.
@@ -62,9 +56,19 @@ namespace NodaTime.Text
         internal int Index { get; private set; }
 
         /// <summary>
+        /// Gets the length of the string being parsed.
+        /// </summary>
+        internal int Length { get { return length; } }
+
+        /// <summary>
+        /// Gets the string being parsed.
+        /// </summary>
+        internal string Value { get { return value; } }
+
+        /// <summary>
         /// Gets the remainder the string that has not been parsed yet.
         /// </summary>
-        internal string Remainder => Value.Substring(Index);
+        internal string Remainder { get { return Value.Substring(Index); } }
 
         /// <summary>
         ///   Returns a <see cref="System.String" /> that represents this instance.
@@ -72,19 +76,27 @@ namespace NodaTime.Text
         /// <returns>
         ///   A <see cref="System.String" /> that represents this instance.
         /// </returns>
-        public override string ToString() =>
-            Index <= 0 ? $"^{Value}"
-                : Index >= Length ? $"{Value}^"
+        public override string ToString()
+        {
+            return Index <= 0 ? "^" + Value
+                : Index >= Length ? Value + "^"
                 : Value.Insert(Index, "^");
+        }
 
         /// <summary>
         /// Returns the next character if there is one or <see cref="Nul" /> if there isn't.
         /// </summary>
         /// <returns></returns>
-        internal char PeekNext() => unchecked(HasMoreCharacters ? Value[Index + 1] : Nul);
+        internal char PeekNext()
+        {
+            unchecked
+            {
+                return HasMoreCharacters ? Value[Index + 1] : Nul;                
+            }
+        }
 
         /// <summary>
-        /// Moves the specified target index. If the new index is out of range of the valid indices
+        /// Moves the specified target index. If the new index is out of range of the valid indicies
         /// for this string then the index is set to the beginning or the end of the string whichever
         /// is nearest the requested index.
         /// </summary>

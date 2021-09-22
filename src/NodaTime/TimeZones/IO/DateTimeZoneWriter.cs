@@ -2,12 +2,10 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using NodaTime.Utility;
-
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using static NodaTime.NodaConstants;
+using NodaTime.Utility;
 
 namespace NodaTime.TimeZones.IO
 {
@@ -36,7 +34,7 @@ namespace NodaTime.TimeZones.IO
             /// <summary>The marker value representing an instant as a fixed 64-bit number of ticks.</summary>
             internal const int MarkerRaw = 2;
             /// <summary>The minimum varint value that represents an number of hours-since-previous.</summary>
-            /// <remarks>Values below this are reserved for markers.</remarks>
+            /// <remarks>Values below value are reserved for markers.</remarks>
             internal const int MinValueForHoursSincePrevious = 1 << 7;
             /// <summary>The minimum varint value that represents an number of minutes since an epoch.</summary>
             /// <remarks>Values below this are interpreted as hours-since-previous (for a range of about 240 years),
@@ -47,14 +45,14 @@ namespace NodaTime.TimeZones.IO
         }
 
         private readonly Stream output;
-        private readonly IList<string>? stringPool;
+        private readonly IList<string> stringPool; 
 
         /// <summary>
         /// Constructs a DateTimeZoneWriter.
         /// </summary>
         /// <param name="output">Where to send the serialized output.</param>
         /// <param name="stringPool">String pool to add strings to, or null for no pool</param>
-        internal DateTimeZoneWriter(Stream output, IList<string>? stringPool)
+        internal DateTimeZoneWriter(Stream output, IList<string> stringPool)
         {
             this.output = output;
             this.stringPool = stringPool;
@@ -66,7 +64,7 @@ namespace NodaTime.TimeZones.IO
         /// <param name="value">The value to write.</param>
         public void WriteCount(int value)
         {
-            Preconditions.CheckArgumentRange(nameof(value), value, 0, int.MaxValue);
+            Preconditions.CheckArgumentRange("value", value, 0, int.MaxValue);
             WriteVarint((uint) value);
         }
 
@@ -102,23 +100,23 @@ namespace NodaTime.TimeZones.IO
             {
                 while (value > 0x7f)
                 {
-                    output.WriteByte((byte) (0x80 | (value & 0x7f)));
+                    output.WriteByte((byte)(0x80 | (value & 0x7f)));
                     value = value >> 7;
                 }
-                output.WriteByte((byte) (value & 0x7f));
+                output.WriteByte((byte)(value & 0x7f));
             }
         }
 
-        public void WriteMilliseconds(int millis)
+        /// <summary>
+        /// Writes the offset value to the stream.
+        /// </summary>
+        /// <param name="offset">The value to write.</param>
+        public void WriteOffset(Offset offset)
         {
-            Preconditions.CheckArgumentRange(nameof(millis), millis,
-                -MillisecondsPerDay + 1,
-                MillisecondsPerDay - 1);
-            millis += MillisecondsPerDay;
             /*
              * First, add 24 hours to the number of milliseconds, to get a value in the range (0, 172800000).
              * (It's exclusive at both ends, but that's insignificant.)
-             * Check whether it's an exact multiple of half-hours or minutes, and encode
+             * Next, check whether it's an exact multiple of half-hours or minutes, and encode
              * appropriately. In every case, if it's an exact multiple, we know that we'll be able to fit
              * the value into the number of bits available.
              * 
@@ -129,22 +127,23 @@ namespace NodaTime.TimeZones.IO
              * 101xxxxx        seconds     172800                3 bytes (21 data bits)
              * 110xxxxx        millis      172800000             4 bytes (29 data bits)
              */
+            int millis = offset.Milliseconds + NodaConstants.MillisecondsPerStandardDay;
             unchecked
             {
-                if (millis % (30 * MillisecondsPerMinute) == 0)
+                if (millis % (30 * NodaConstants.MillisecondsPerMinute) == 0)
                 {
-                    int units = millis / (30 * MillisecondsPerMinute);
-                    WriteByte((byte) units);
+                    int units = millis / (30 * NodaConstants.MillisecondsPerMinute);
+                    WriteByte((byte)units);
                 }
-                else if (millis % MillisecondsPerMinute == 0)
+                else if (millis % NodaConstants.MillisecondsPerMinute == 0)
                 {
-                    int minutes = millis / MillisecondsPerMinute;
-                    WriteByte((byte) (0x80 | (minutes >> 8)));
-                    WriteByte((byte) (minutes & 0xff));
+                    int minutes = millis / NodaConstants.MillisecondsPerMinute;
+                    WriteByte((byte)(0x80 | (minutes >> 8)));
+                    WriteByte((byte)(minutes & 0xff));
                 }
-                else if (millis % MillisecondsPerSecond == 0)
+                else if (millis%NodaConstants.MillisecondsPerSecond == 0)
                 {
-                    int seconds = millis / MillisecondsPerSecond;
+                    int seconds = millis/NodaConstants.MillisecondsPerSecond;
                     WriteByte((byte) (0xa0 | (byte) ((seconds >> 16))));
                     WriteInt16((short) (seconds & 0xffff));
                 }
@@ -156,21 +155,12 @@ namespace NodaTime.TimeZones.IO
         }
 
         /// <summary>
-        /// Writes the offset value to the stream.
-        /// </summary>
-        /// <param name="offset">The value to write.</param>
-        public void WriteOffset(Offset offset)
-        {
-            WriteMilliseconds(offset.Milliseconds);
-        }
-
-        /// <summary>
         /// Writes the given dictionary of string to string to the stream.
         /// </summary>
         /// <param name="dictionary">The <see cref="IDictionary{TKey,TValue}" /> to write.</param>
         public void WriteDictionary(IDictionary<string, string> dictionary)
         {
-            Preconditions.CheckNotNull(dictionary, nameof(dictionary));
+            Preconditions.CheckNotNull(dictionary, "dictionary");
             WriteCount(dictionary.Count);
             foreach (var entry in dictionary)
             {
@@ -183,17 +173,17 @@ namespace NodaTime.TimeZones.IO
         {
             if (previous != null)
             {
-                Preconditions.CheckArgument(value >= previous.Value, nameof(value), "Transition must move forward in time");
+                Preconditions.CheckArgumentRange("value", value.Ticks, previous.Value.Ticks, long.MaxValue);
             }
 
             unchecked
             {
-                if (value == Instant.BeforeMinValue)
+                if (value == Instant.MinValue)
                 {
                     WriteCount(ZoneIntervalConstants.MarkerMinValue);
                     return;
                 }
-                if (value == Instant.AfterMaxValue)
+                if (value == Instant.MaxValue)
                 {
                     WriteCount(ZoneIntervalConstants.MarkerMaxValue);
                     return;
@@ -203,14 +193,14 @@ namespace NodaTime.TimeZones.IO
                 // (i.e. about 5-8 months), and at an integral number of hours difference. We therefore gain a
                 // significant reduction in output size by encoding transitions as the whole number of hours since the
                 // previous, if possible.
-                // If the previous value was "the start of time" then there's no point in trying to use it.
-                if (previous != null && previous.Value != Instant.BeforeMinValue)
+
+                if (previous != null)
                 {
                     // Note that the difference might exceed the range of a long, so we can't use a Duration here.
-                    ulong ticks = (ulong) (value.ToUnixTimeTicks() - previous.Value.ToUnixTimeTicks());
-                    if (ticks % TicksPerHour == 0)
+                    ulong ticks = (ulong) (value.Ticks - previous.Value.Ticks);
+                    if (ticks % NodaConstants.TicksPerHour == 0)
                     {
-                        ulong hours = ticks / TicksPerHour;
+                        ulong hours = ticks / NodaConstants.TicksPerHour;
                         // As noted above, this will generally fall within the 4000-6000 range, although values up to
                         // ~700,000 exist in TZDB.
                         if (ZoneIntervalConstants.MinValueForHoursSincePrevious <= hours &&
@@ -226,10 +216,10 @@ namespace NodaTime.TimeZones.IO
                 // out as a whole number of minutes since an (arbitrary, known) epoch.
                 if (value >= ZoneIntervalConstants.EpochForMinutesSinceEpoch)
                 {
-                    ulong ticks = (ulong) (value.ToUnixTimeTicks() - ZoneIntervalConstants.EpochForMinutesSinceEpoch.ToUnixTimeTicks());
-                    if (ticks % TicksPerMinute == 0)
+                    ulong ticks = (ulong) (value.Ticks - ZoneIntervalConstants.EpochForMinutesSinceEpoch.Ticks);
+                    if (ticks % NodaConstants.TicksPerMinute == 0)
                     {
-                        ulong minutes = ticks / TicksPerMinute;
+                        ulong minutes = ticks / NodaConstants.TicksPerMinute;
                         // We typically have a count on the order of 80M here.
                         if (ZoneIntervalConstants.MinValueForMinutesSinceEpoch < minutes && minutes <= int.MaxValue)
                         {
@@ -242,7 +232,7 @@ namespace NodaTime.TimeZones.IO
                 // while most of the values we write here are actually whole numbers of _seconds_, optimising for that
                 // case will save around 2KB (with tzdb 2012j), so doesn't seem worthwhile.
                 WriteCount(ZoneIntervalConstants.MarkerRaw);
-                WriteInt64(value.ToUnixTimeTicks());
+                WriteInt64(value.Ticks);
             }
         }
 
@@ -252,7 +242,7 @@ namespace NodaTime.TimeZones.IO
         /// <param name="value">The value to write.</param>
         public void WriteString(string value)
         {
-            if (stringPool is null)
+            if (stringPool == null)
             {
                 byte[] data = Encoding.UTF8.GetBytes(value);
                 int length = data.Length;
@@ -279,8 +269,8 @@ namespace NodaTime.TimeZones.IO
         {
             unchecked
             {
-                WriteByte((byte) ((value >> 8) & 0xff));
-                WriteByte((byte) (value & 0xff));
+                WriteByte((byte)((value >> 8) & 0xff));
+                WriteByte((byte)(value & 0xff));
             }
         }
 
@@ -292,8 +282,8 @@ namespace NodaTime.TimeZones.IO
         {
             unchecked
             {
-                WriteInt16((short) (value >> 16));
-                WriteInt16((short) value);
+                WriteInt16((short)(value >> 16));
+                WriteInt16((short)value);
             }
         }
 
@@ -305,8 +295,8 @@ namespace NodaTime.TimeZones.IO
         {
             unchecked
             {
-                WriteInt32((int) (value >> 32));
-                WriteInt32((int) value);
+                WriteInt32((int)(value >> 32));
+                WriteInt32((int)value);
             }
         }
 

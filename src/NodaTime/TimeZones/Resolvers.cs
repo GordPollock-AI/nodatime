@@ -2,8 +2,9 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using NodaTime.Utility;
 using System;
+using JetBrains.Annotations;
+using NodaTime.Utility;
 
 namespace NodaTime.TimeZones
 {
@@ -20,27 +21,22 @@ namespace NodaTime.TimeZones
     /// </para>
     /// </remarks>
     /// <threadsafety>All members of this class are thread-safe, as are the values returned by them.</threadsafety>
-#pragma warning disable CA1724 // Name conflicts with a framework name
     public static class Resolvers
-#pragma warning restore CA1724
     {
         /// <summary>
         /// An <see cref="AmbiguousTimeResolver"/> which returns the earlier of the two matching times.
         /// </summary>
-        /// <value>An <see cref="AmbiguousTimeResolver"/> which returns the earlier of the two matching times.</value>
-        public static AmbiguousTimeResolver ReturnEarlier { get; } = (earlier, later) => earlier;
+        public static readonly AmbiguousTimeResolver ReturnEarlier = (earlier, later) => earlier;
 
         /// <summary>
         /// An <see cref="AmbiguousTimeResolver"/> which returns the later of the two matching times.
         /// </summary>
-        /// <value>An <see cref="AmbiguousTimeResolver"/> which returns the later of the two matching times.</value>
-        public static AmbiguousTimeResolver ReturnLater { get; } = (earlier, later) => later;
+        public static readonly AmbiguousTimeResolver ReturnLater = (earlier, later) => later;
 
         /// <summary>
         /// An <see cref="AmbiguousTimeResolver"/> which simply throws an <see cref="AmbiguousTimeException"/>.
         /// </summary>
-        /// <value>An <see cref="AmbiguousTimeResolver"/> which simply throws an <see cref="AmbiguousTimeException"/>.</value>
-        public static AmbiguousTimeResolver ThrowWhenAmbiguous { get; } = (earlier, later) =>
+        public static readonly AmbiguousTimeResolver ThrowWhenAmbiguous = (earlier, later) =>
         {
             throw new AmbiguousTimeException(earlier, later);
         };
@@ -49,59 +45,33 @@ namespace NodaTime.TimeZones
         /// A <see cref="SkippedTimeResolver"/> which returns the final tick of the time zone interval
         /// before the "gap".
         /// </summary>
-        /// <value>A <see cref="SkippedTimeResolver"/> which returns the final tick of the time zone interval
-        /// before the "gap".</value>
-        public static SkippedTimeResolver ReturnEndOfIntervalBefore { get; } = (local, zone, before, after) =>
+        public static readonly SkippedTimeResolver ReturnEndOfIntervalBefore = (local, zone, before, after) =>
         {
-            Preconditions.CheckNotNull(zone, nameof(zone));
-            Preconditions.CheckNotNull(before, nameof(before));
-            Preconditions.CheckNotNull(after, nameof(after));
-            // Given that there's a zone after before, it can't extend to the end of time.
-            return new ZonedDateTime(before.End - Duration.Epsilon, zone, local.Calendar);
+            var localDateTime = new LocalDateTime(before.LocalEnd - Duration.Epsilon, local.Calendar);
+            return new ZonedDateTime(localDateTime, before.WallOffset, zone);
         };
 
         /// <summary>
         /// A <see cref="SkippedTimeResolver"/> which returns the first tick of the time zone interval
         /// after the "gap".
         /// </summary>
-        /// <value>
-        /// A <see cref="SkippedTimeResolver"/> which returns the first tick of the time zone interval
-        /// after the "gap".
-        /// </value>
-        public static SkippedTimeResolver ReturnStartOfIntervalAfter { get; } = (local, zone, before, after) =>
+        public static readonly SkippedTimeResolver ReturnStartOfIntervalAfter = (local, zone, before, after) =>
         {
-            Preconditions.CheckNotNull(zone, nameof(zone));
-            Preconditions.CheckNotNull(before, nameof(before));
-            Preconditions.CheckNotNull(after, nameof(after));
-            return new ZonedDateTime(after.Start, zone, local.Calendar);
-        };
-
-        /// <summary>
-        /// A <see cref="SkippedTimeResolver"/> which shifts values in the "gap" forward by the duration
-        /// of the gap (which is usually 1 hour). This corresponds to the instant that would have occured,
-        /// had there not been a transition.
-        /// </summary>
-        /// <value>
-        /// A <see cref="SkippedTimeResolver"/> which shifts values in the "gap" forward by the duration
-        /// of the gap (which is usually 1 hour). 
-        /// </value>
-        public static SkippedTimeResolver ReturnForwardShifted { get; } = (local, zone, before, after) =>
-        {
-            Preconditions.CheckNotNull(zone, nameof(zone));
-            Preconditions.CheckNotNull(before, nameof(before));
-            Preconditions.CheckNotNull(after, nameof(after));
-            return new ZonedDateTime(new OffsetDateTime(local, before.WallOffset).WithOffset(after.WallOffset), zone);
+            Preconditions.CheckNotNull(zone, "zone");
+            Preconditions.CheckNotNull(before, "before");
+            Preconditions.CheckNotNull(after, "after");
+            var localDateTime = new LocalDateTime(after.LocalStart, local.Calendar);
+            return new ZonedDateTime(localDateTime, after.WallOffset, zone);
         };
 
         /// <summary>
         /// A <see cref="SkippedTimeResolver"/> which simply throws a <see cref="SkippedTimeException"/>.
         /// </summary>
-        /// <value>A <see cref="SkippedTimeResolver"/> which simply throws a <see cref="SkippedTimeException"/>.</value>
-        public static SkippedTimeResolver ThrowWhenSkipped { get; } = (local, zone, before, after) =>
+        public static readonly SkippedTimeResolver ThrowWhenSkipped = (local, zone, before, after) =>
         {
-            Preconditions.CheckNotNull(zone, nameof(zone));
-            Preconditions.CheckNotNull(before, nameof(before));
-            Preconditions.CheckNotNull(after, nameof(after));
+            Preconditions.CheckNotNull(zone, "zone");
+            Preconditions.CheckNotNull(before, "before");
+            Preconditions.CheckNotNull(after, "after");
             throw new SkippedTimeException(local, zone);
         };
 
@@ -115,25 +85,17 @@ namespace NodaTime.TimeZones
         /// <see cref="ThrowWhenAmbiguous"/> and <see cref="ThrowWhenSkipped"/>.
         /// </remarks>
         /// <seealso cref="DateTimeZone.AtStrictly"/>
-        /// <value>A <see cref="ZoneLocalMappingResolver"/> which only ever succeeds in the (usual) case where the result
-        /// of the mapping is unambiguous.</value>
-        public static ZoneLocalMappingResolver StrictResolver { get; } =
-            CreateMappingResolver(ThrowWhenAmbiguous, ThrowWhenSkipped);
+        public static readonly ZoneLocalMappingResolver StrictResolver = CreateMappingResolver(ThrowWhenAmbiguous, ThrowWhenSkipped);
 
         /// <summary>
         /// A <see cref="ZoneLocalMappingResolver"/> which never throws an exception due to ambiguity or skipped time.
         /// </summary>
         /// <remarks>
-        /// Ambiguity is handled by returning the earlier occurrence, and skipped times are shifted forward by the duration
-        /// of the gap. This resolver combines <see cref="ReturnEarlier"/> and <see cref="ReturnForwardShifted"/>.
-        /// <para>Note: The behavior of this resolver was changed in version 2.0 to fit the most commonly seen real-world
-        /// usage pattern.  Previous versions combined the <see cref="ReturnLater"/> and <see cref="ReturnStartOfIntervalAfter"/>
-        /// resolvers, which can still be used separately if desired.</para>
+        /// Ambiguity is handled by returning the later occurrence, and skipped times are mapped to the start of the zone interval
+        /// after the gap. This resolver combines <see cref="ReturnLater"/> and <see cref="ReturnStartOfIntervalAfter"/>.
         /// </remarks>
         /// <seealso cref="DateTimeZone.AtLeniently"/>
-        /// <value>A <see cref="ZoneLocalMappingResolver"/> which never throws an exception due to ambiguity or skipped time.</value>
-        public static ZoneLocalMappingResolver LenientResolver { get; } =
-            CreateMappingResolver(ReturnEarlier, ReturnForwardShifted);
+        public static readonly ZoneLocalMappingResolver LenientResolver = CreateMappingResolver(ReturnLater, ReturnStartOfIntervalAfter);
 
         /// <summary>
         /// Combines an <see cref="AmbiguousTimeResolver"/> and a <see cref="SkippedTimeResolver"/> to create a
@@ -147,18 +109,21 @@ namespace NodaTime.TimeZones
         /// <param name="ambiguousTimeResolver">Resolver to use for ambiguous mappings.</param>
         /// <param name="skippedTimeResolver">Resolver to use for "skipped" mappings.</param>
         /// <returns>The logical combination of the two resolvers.</returns>
-        public static ZoneLocalMappingResolver CreateMappingResolver(AmbiguousTimeResolver ambiguousTimeResolver, SkippedTimeResolver skippedTimeResolver)
+        public static ZoneLocalMappingResolver CreateMappingResolver([NotNull] AmbiguousTimeResolver ambiguousTimeResolver, [NotNull] SkippedTimeResolver skippedTimeResolver)
         {
-            Preconditions.CheckNotNull(ambiguousTimeResolver, nameof(ambiguousTimeResolver));
-            Preconditions.CheckNotNull(skippedTimeResolver, nameof(skippedTimeResolver));
+            Preconditions.CheckNotNull(ambiguousTimeResolver, "ambiguousTimeResolver");
+            Preconditions.CheckNotNull(skippedTimeResolver, "skippedTimeResolver");
             return mapping =>
-                Preconditions.CheckNotNull(mapping, nameof(mapping)).Count switch
+            {
+                Preconditions.CheckNotNull(mapping, "mapping");
+                switch (mapping.Count)
                 {
-                    0 => skippedTimeResolver(mapping.LocalDateTime, mapping.Zone, mapping.EarlyInterval, mapping.LateInterval),
-                    1 => mapping.First(),
-                    2 => ambiguousTimeResolver(mapping.First(), mapping.Last()),
-                    _ => throw new InvalidOperationException("Mapping has count outside range 0-2; should not happen.")
-                };
+                    case 0: return skippedTimeResolver(mapping.LocalDateTime, mapping.Zone, mapping.EarlyInterval, mapping.LateInterval);
+                    case 1: return mapping.First();
+                    case 2: return ambiguousTimeResolver(mapping.First(), mapping.Last());
+                    default: throw new InvalidOperationException("Mapping has count outside range 0-2; should not happen.");
+                }
+            };
         }
     }
 }

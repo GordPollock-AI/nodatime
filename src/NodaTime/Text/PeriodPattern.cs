@@ -2,10 +2,11 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using NodaTime.Annotations;
-using NodaTime.Utility;
 using System.Text;
-using static NodaTime.NodaConstants;
+using NodaTime.Annotations;
+using NodaTime.Properties;
+using NodaTime.Utility;
+using System;
 
 namespace NodaTime.Text
 {
@@ -18,16 +19,22 @@ namespace NodaTime.Text
     {
         /// <summary>
         /// Pattern which uses the normal ISO format for all the supported ISO
-        /// fields, but extends the time part with "s" for milliseconds, "t" for ticks and "n" for nanoseconds.
+        /// fields, but extends the time part with "s" for milliseconds and "t" for ticks.
         /// No normalization is carried out, and a period may contain weeks as well as years, months and days.
         /// Each element may also be negative, independently of other elements. This pattern round-trips its
         /// values: a parse/format cycle will produce an identical period, including units.
         /// </summary>
-        /// <value>
+        public static PeriodPattern Roundtrip => RoundtripPattern;
+
+        /// <summary>
         /// Pattern which uses the normal ISO format for all the supported ISO
-        /// fields, but extends the time part with "s" for milliseconds, "t" for ticks and "n" for nanoseconds.
-        /// </value>
-        public static PeriodPattern Roundtrip { get; } = new PeriodPattern(new RoundtripPatternImpl());
+        /// fields, but extends the time part with "s" for milliseconds and "t" for ticks.
+        /// No normalization is carried out, and a period may contain weeks as well as years, months and days.
+        /// Each element may also be negative, independently of other elements. This pattern round-trips its
+        /// values: a parse/format cycle will produce an identical period, including units.
+        /// </summary>
+        [Obsolete("Use Roundtrip for compatibility with 2.0")]
+        public static readonly PeriodPattern RoundtripPattern = new PeriodPattern(new RoundtripPatternImpl());
 
         /// <summary>
         /// A "normalizing" pattern which abides by the ISO-8601 duration format as far as possible.
@@ -41,14 +48,28 @@ namespace NodaTime.Text
         /// combined weeks/days/time portions are considered. Such a period could never
         /// be useful anyway, however.
         /// </remarks>
-        /// <value>A "normalizing" pattern which abides by the ISO-8601 duration format as far as possible.</value>
-        public static PeriodPattern NormalizingIso { get; } = new PeriodPattern(new NormalizingIsoPatternImpl());
+        public static PeriodPattern NormalizingIso => NormalizingIsoPattern;
+
+        /// <summary>
+        /// A "normalizing" pattern which abides by the ISO-8601 duration format as far as possible.
+        /// Weeks are added to the number of days (after multiplying by 7). Time units are normalized
+        /// (extending into days where necessary), and fractions of seconds are represented within the
+        /// seconds part. Unlike ISO-8601, which pattern allows for negative values within a period.
+        /// </summary>
+        /// <remarks>
+        /// Note that normalizing the period when formatting will cause an <see cref="System.OverflowException"/>
+        /// if the period contains more than <see cref="System.Int64.MaxValue"/> ticks when the
+        /// combined weeks/days/time portions are considered. Such a period could never
+        /// be useful anyway, however.
+        /// </remarks>
+        [Obsolete("Use NormalizingIso for compatibility with 2.0")]
+        public static readonly PeriodPattern NormalizingIsoPattern = new PeriodPattern(new NormalizingIsoPatternImpl());
 
         private readonly IPattern<Period> pattern;
 
         private PeriodPattern(IPattern<Period> pattern)
         {
-            this.pattern = Preconditions.CheckNotNull(pattern, nameof(pattern));
+            this.pattern = Preconditions.CheckNotNull(pattern, "pattern");
         }
 
         /// <summary>
@@ -60,25 +81,22 @@ namespace NodaTime.Text
         /// </remarks>
         /// <param name="text">The text value to parse.</param>
         /// <returns>The result of parsing, which may be successful or unsuccessful.</returns>
-        public ParseResult<Period> Parse([SpecialNullHandling] string text) => pattern.Parse(text);
+        public ParseResult<Period> Parse(string text)
+        {
+            return pattern.Parse(text);
+        }
 
         /// <summary>
         /// Formats the given period as text according to the rules of this pattern.
         /// </summary>
         /// <param name="value">The period to format.</param>
         /// <returns>The period formatted according to this pattern.</returns>
-        public string Format(Period value) => pattern.Format(value);
+        public string Format(Period value)
+        {
+            return pattern.Format(value);
+        }
 
-        /// <summary>
-        /// Formats the given value as text according to the rules of this pattern,
-        /// appending to the given <see cref="StringBuilder"/>.
-        /// </summary>
-        /// <param name="value">The value to format.</param>
-        /// <param name="builder">The <c>StringBuilder</c> to append to.</param>
-        /// <returns>The builder passed in as <paramref name="builder"/>.</returns>
-        public StringBuilder AppendFormat(Period value, StringBuilder builder) => pattern.AppendFormat(value, builder);
-
-        private static void AppendValue(StringBuilder builder, long value, char suffix)
+        private static void AppendValue(StringBuilder builder, long value, string suffix)
         {
             // Avoid having a load of conditions in the calling code by checking here
             if (value == 0)
@@ -89,19 +107,28 @@ namespace NodaTime.Text
             builder.Append(suffix);
         }
 
-        private static ParseResult<Period> InvalidUnit(ValueCursor cursor, char unitCharacter) => ParseResult<Period>.ForInvalidValue(cursor, TextErrorMessages.InvalidUnitSpecifier, unitCharacter);
+        private static ParseResult<Period> InvalidUnit(ValueCursor cursor, char unitCharacter)
+        {
+            return ParseResult<Period>.ForInvalidValue(cursor, Messages.Parse_InvalidUnitSpecifier, unitCharacter);
+        }
 
-        private static ParseResult<Period> RepeatedUnit(ValueCursor cursor, char unitCharacter) => ParseResult<Period>.ForInvalidValue(cursor, TextErrorMessages.RepeatedUnitSpecifier, unitCharacter);
+        private static ParseResult<Period> RepeatedUnit(ValueCursor cursor, char unitCharacter)
+        {
+            return ParseResult<Period>.ForInvalidValue(cursor, Messages.Parse_RepeatedUnitSpecifier, unitCharacter);
+        }
 
-        private static ParseResult<Period> MisplacedUnit(ValueCursor cursor, char unitCharacter) => ParseResult<Period>.ForInvalidValue(cursor, TextErrorMessages.MisplacedUnitSpecifier, unitCharacter);
+        private static ParseResult<Period> MisplacedUnit(ValueCursor cursor, char unitCharacter)
+        {
+            return ParseResult<Period>.ForInvalidValue(cursor, Messages.Parse_MisplacedUnitSpecifier, unitCharacter);
+        }
 
         private sealed class RoundtripPatternImpl : IPattern<Period>
-        {
+        {            
             public ParseResult<Period> Parse(string text)
             {
-                if (text is null)
+                if (text == null)
                 {
-                    return ParseResult<Period>.ArgumentNull(nameof(text));
+                    return ParseResult<Period>.ArgumentNull("text");
                 }
                 if (text.Length == 0)
                 {
@@ -109,7 +136,7 @@ namespace NodaTime.Text
                 }
 
                 ValueCursor valueCursor = new ValueCursor(text);
-
+                
                 valueCursor.MoveNext();
                 if (valueCursor.Current != 'P')
                 {
@@ -120,12 +147,13 @@ namespace NodaTime.Text
                 PeriodUnits unitsSoFar = 0;
                 while (valueCursor.MoveNext())
                 {
+                    long unitValue;
                     if (inDate && valueCursor.Current == 'T')
                     {
                         inDate = false;
                         continue;
                     }
-                    var failure = valueCursor.ParseInt64<Period>(out long unitValue);
+                    var failure = valueCursor.ParseInt64<Period>(out unitValue);
                     if (failure != null)
                     {
                         return failure;
@@ -152,7 +180,6 @@ namespace NodaTime.Text
                         case 'S': unit = PeriodUnits.Seconds; break;
                         case 's': unit = PeriodUnits.Milliseconds; break;
                         case 't': unit = PeriodUnits.Ticks; break;
-                        case 'n': unit = PeriodUnits.Nanoseconds; break;
                         default: return InvalidUnit(valueCursor, valueCursor.Current);
                     }
                     if ((unit & unitsSoFar) != 0)
@@ -178,48 +205,35 @@ namespace NodaTime.Text
                 return ParseResult<Period>.ForValue(builder.Build());
             }
 
-            public string Format(Period value) => AppendFormat(value, new StringBuilder()).ToString();
-
-            public StringBuilder AppendFormat(Period value, StringBuilder builder)
+            public string Format(Period value)
             {
-                Preconditions.CheckNotNull(value, nameof(value));
-                Preconditions.CheckNotNull(builder, nameof(builder));
-                // Always ensure we've got *some* unit to ensure the result is valid in ISO-8601; arbitrarily pick days.
-                // Note: "P0S" might be nicer here, but NormalizingIsoPatternImpl picked "P0D" a
-                // long time ago and we want to be consistent between the two.
-                // We might want to make both pattern implementations configurable at some point.
-                if (value.Equals(Period.Zero))
-                {
-                    builder.Append("P0D");
-                    return builder;
-                }
-                builder.Append('P');
-                AppendValue(builder, value.Years, 'Y');
-                AppendValue(builder, value.Months, 'M');
-                AppendValue(builder, value.Weeks, 'W');
-                AppendValue(builder, value.Days, 'D');
+                Preconditions.CheckNotNull(value, "value");
+                StringBuilder builder = new StringBuilder("P");
+                AppendValue(builder, value.Years, "Y");
+                AppendValue(builder, value.Months, "M");
+                AppendValue(builder, value.Weeks, "W");
+                AppendValue(builder, value.Days, "D");
                 if (value.HasTimeComponent)
                 {
-                    builder.Append('T');
-                    AppendValue(builder, value.Hours, 'H');
-                    AppendValue(builder, value.Minutes, 'M');
-                    AppendValue(builder, value.Seconds, 'S');
-                    AppendValue(builder, value.Milliseconds, 's');
-                    AppendValue(builder, value.Ticks, 't');
-                    AppendValue(builder, value.Nanoseconds, 'n');
+                    builder.Append("T");
+                    AppendValue(builder, value.Hours, "H");
+                    AppendValue(builder, value.Minutes, "M");
+                    AppendValue(builder, value.Seconds, "S");
+                    AppendValue(builder, value.Milliseconds, "s");
+                    AppendValue(builder, value.Ticks, "t");
                 }
-                return builder;
+                return builder.ToString();
             }
         }
 
         private sealed class NormalizingIsoPatternImpl : IPattern<Period>
         {
-            // TODO(misc): Tidy this up a *lot*.
+            // TODO: Tidy this up a *lot*.
             public ParseResult<Period> Parse(string text)
             {
-                if (text is null)
+                if (text == null)
                 {
-                    return ParseResult<Period>.ArgumentNull(nameof(text));
+                    return ParseResult<Period>.ArgumentNull("text");
                 }
                 if (text.Length == 0)
                 {
@@ -238,13 +252,14 @@ namespace NodaTime.Text
                 PeriodUnits unitsSoFar = 0;
                 while (valueCursor.MoveNext())
                 {
+                    long unitValue;
                     if (inDate && valueCursor.Current == 'T')
                     {
                         inDate = false;
                         continue;
                     }
                     bool negative = valueCursor.Current == '-';
-                    var failure = valueCursor.ParseInt64<Period>(out long unitValue);
+                    var failure = valueCursor.ParseInt64<Period>(out unitValue);
                     if (failure != null)
                     {
                         return failure;
@@ -270,7 +285,7 @@ namespace NodaTime.Text
                         case 'H': unit = PeriodUnits.Hours; break;
                         case 'S': unit = PeriodUnits.Seconds; break;
                         case ',':
-                        case '.': unit = PeriodUnits.Nanoseconds; break; // Special handling below
+                        case '.': unit = PeriodUnits.Ticks; break; // Special handling below
                         default: return InvalidUnit(valueCursor, valueCursor.Current);
                     }
                     if ((unit & unitsSoFar) != 0)
@@ -293,7 +308,7 @@ namespace NodaTime.Text
                     }
 
                     // Seen a . or , which need special handling.
-                    if (unit == PeriodUnits.Nanoseconds)
+                    if (unit == PeriodUnits.Ticks)
                     {
                         // Check for already having seen seconds, e.g. PT5S0.5
                         if ((unitsSoFar & PeriodUnits.Seconds) != 0)
@@ -306,8 +321,9 @@ namespace NodaTime.Text
                         {
                             return ParseResult<Period>.MissingNumber(valueCursor);
                         }
-                        // Can cope with at most 999999999 nanoseconds
-                        if (!valueCursor.ParseFraction(9, 9, out int totalNanoseconds, 1))
+                        int totalTicks;
+                        // Can cope with at most 9999999 ticks
+                        if (!valueCursor.ParseFraction(7, 7, out totalTicks, false))
                         {
                             return ParseResult<Period>.MissingNumber(valueCursor);
                         }
@@ -315,11 +331,10 @@ namespace NodaTime.Text
                         // as the indication of whether this value is negative.
                         if (negative)
                         {
-                            totalNanoseconds = -totalNanoseconds;
+                            totalTicks = -totalTicks;
                         }
-                        builder.Milliseconds = (totalNanoseconds / NanosecondsPerMillisecond) % MillisecondsPerSecond;
-                        builder.Ticks = (totalNanoseconds / NanosecondsPerTick) % TicksPerMillisecond;
-                        builder.Nanoseconds = totalNanoseconds % NanosecondsPerTick;
+                        builder.Milliseconds = (totalTicks / NodaConstants.TicksPerMillisecond) % NodaConstants.MillisecondsPerSecond;
+                        builder.Ticks = totalTicks % NodaConstants.TicksPerMillisecond;
 
                         if (valueCursor.Current != 'S')
                         {
@@ -337,54 +352,50 @@ namespace NodaTime.Text
                 }
                 if (unitsSoFar == 0)
                 {
-                    return ParseResult<Period>.ForInvalidValue(valueCursor, TextErrorMessages.EmptyPeriod);
+                    return ParseResult<Period>.ForInvalidValue(valueCursor, Messages.Parse_EmptyPeriod);
                 }
                 return ParseResult<Period>.ForValue(builder.Build());
             }
 
-            public string Format(Period value) => AppendFormat(value, new StringBuilder()).ToString();
-
-            public StringBuilder AppendFormat(Period value, StringBuilder builder)
+            public string Format(Period value)
             {
-                Preconditions.CheckNotNull(value, nameof(value));
-                Preconditions.CheckNotNull(builder, nameof(builder));
+                Preconditions.CheckNotNull(value, "value");
                 value = value.Normalize();
                 // Always ensure we've got *some* unit; arbitrarily pick days.
                 if (value.Equals(Period.Zero))
                 {
-                    builder.Append("P0D");
-                    return builder;
+                    return "P0D";
                 }
-                builder.Append('P');
-                AppendValue(builder, value.Years, 'Y');
-                AppendValue(builder, value.Months, 'M');
-                AppendValue(builder, value.Weeks, 'W');
-                AppendValue(builder, value.Days, 'D');
+                StringBuilder builder = new StringBuilder("P");
+                AppendValue(builder, value.Years, "Y");
+                AppendValue(builder, value.Months, "M");
+                AppendValue(builder, value.Weeks, "W");
+                AppendValue(builder, value.Days, "D");
                 if (value.HasTimeComponent)
                 {
-                    builder.Append('T');
-                    AppendValue(builder, value.Hours, 'H');
-                    AppendValue(builder, value.Minutes, 'M');
-                    long nanoseconds = value.Milliseconds * NanosecondsPerMillisecond + value.Ticks * NanosecondsPerTick + value.Nanoseconds;
+                    builder.Append("T");
+                    AppendValue(builder, value.Hours, "H");
+                    AppendValue(builder, value.Minutes, "M");
+                    long ticks = value.Milliseconds * NodaConstants.TicksPerMillisecond + value.Ticks;
                     long seconds = value.Seconds;
-                    if (nanoseconds != 0 || seconds != 0)
+                    if (ticks != 0 || seconds != 0)
                     {
-                        if (nanoseconds < 0 || seconds < 0)
+                        if (ticks < 0 || seconds < 0)
                         {
-                            builder.Append('-');
-                            nanoseconds = -nanoseconds;
+                            builder.Append("-");
+                            ticks = -ticks;
                             seconds = -seconds;
                         }
                         FormatHelper.FormatInvariant(seconds, builder);
-                        if (nanoseconds != 0)
+                        if (ticks != 0)
                         {
-                            builder.Append('.');
-                            FormatHelper.AppendFractionTruncate((int) nanoseconds, 9, 9, builder);
+                            builder.Append(".");
+                            FormatHelper.AppendFractionTruncate((int)ticks, 7, 7, builder);
                         }
-                        builder.Append('S');
+                        builder.Append("S");
                     }
                 }
-                return builder;
+                return builder.ToString();
             }
         }
     }

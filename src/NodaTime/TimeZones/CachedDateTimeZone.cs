@@ -2,7 +2,9 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
+using NodaTime.TimeZones.IO;
 using NodaTime.Utility;
+using System;
 
 namespace NodaTime.TimeZones
 {
@@ -27,12 +29,7 @@ namespace NodaTime.TimeZones
     internal sealed class CachedDateTimeZone : DateTimeZone
     {
         private readonly IZoneIntervalMap map;
-
-        /// <summary>
-        /// Gets the cached time zone.
-        /// </summary>
-        /// <value>The time zone.</value>
-        internal DateTimeZone TimeZone { get; }
+        private readonly DateTimeZone timeZone;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CachedDateTimeZone"/> class.
@@ -41,9 +38,15 @@ namespace NodaTime.TimeZones
         /// <param name="map">The caching map</param>
         private CachedDateTimeZone(DateTimeZone timeZone, IZoneIntervalMap map) : base(timeZone.Id, false, timeZone.MinOffset, timeZone.MaxOffset)
         {
-            this.TimeZone = timeZone;
+            this.timeZone = timeZone;
             this.map = map;
         }
+
+        /// <summary>
+        /// Gets the cached time zone.
+        /// </summary>
+        /// <value>The time zone.</value>
+        internal DateTimeZone TimeZone { get { return timeZone; } }
 
         /// <summary>
         /// Returns a cached time zone for the given time zone.
@@ -55,12 +58,12 @@ namespace NodaTime.TimeZones
         /// <returns>The cached time zone.</returns>
         internal static DateTimeZone ForZone(DateTimeZone timeZone)
         {
-            Preconditions.CheckNotNull(timeZone, nameof(timeZone));
+            Preconditions.CheckNotNull(timeZone, "timeZone");
             if (timeZone is CachedDateTimeZone || timeZone.IsFixed)
             {
                 return timeZone;
             }
-            return new CachedDateTimeZone(timeZone, CachingZoneIntervalMap.CacheMap(timeZone));
+            return new CachedDateTimeZone(timeZone, CachingZoneIntervalMap.CacheMap(timeZone, CachingZoneIntervalMap.CacheType.Hashtable));
         }
 
         /// <summary>
@@ -70,5 +73,41 @@ namespace NodaTime.TimeZones
         {
             return map.GetZoneInterval(instant);
         }
+
+        #region I/O
+        /// <summary>
+        /// Writes the time zone to the specified writer.
+        /// </summary>
+        /// <param name="writer">The writer to write to.</param>
+        internal void WriteLegacy(LegacyDateTimeZoneWriter writer)
+        {
+            Preconditions.CheckNotNull(writer, "writer");
+            writer.WriteTimeZone(timeZone);
+        }
+
+        /// <summary>
+        /// Reads the zone from the specified reader.
+        /// </summary>
+        /// <param name="reader">The reader.</param>
+        /// <param name="id">The id.</param>
+        /// <returns></returns>
+        internal static DateTimeZone ReadLegacy(LegacyDateTimeZoneReader reader, string id)
+        {
+            Preconditions.CheckNotNull(reader, "reader");
+            var timeZone = reader.ReadTimeZone(id);
+            return ForZone(timeZone);
+        }
+
+        [Obsolete("General DateTimeZone equality is not supported in 2.0")]
+        protected override bool EqualsImpl(DateTimeZone zone)
+        {
+            return TimeZone.Equals(((CachedDateTimeZone) zone).TimeZone);
+        }
+
+        public override int GetHashCode()
+        {
+            return TimeZone.GetHashCode();
+        }
+        #endregion
     }
 }

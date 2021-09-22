@@ -2,8 +2,8 @@
 // Use of this source code is governed by the Apache License 2.0,
 // as found in the LICENSE.txt file.
 
-using NodaTime.Annotations;
 using System;
+using NodaTime.Annotations;
 
 namespace NodaTime
 {
@@ -21,7 +21,7 @@ namespace NodaTime
         /// The singleton instance of <see cref="SystemClock"/>.
         /// </summary>
         /// <value>The singleton instance of <see cref="SystemClock"/>.</value>
-        public static SystemClock Instance { get; } = new SystemClock();
+        public static readonly SystemClock Instance = new SystemClock();
 
         /// <summary>
         /// Constructor present to prevent external construction.
@@ -33,7 +33,8 @@ namespace NodaTime
         /// <summary>
         /// Gets the current time as an <see cref="Instant"/>.
         /// </summary>
-        /// <returns>The current time in ticks as an <see cref="Instant"/>.</returns>
-        public Instant GetCurrentInstant() => NodaConstants.BclEpoch.PlusTicks(DateTime.UtcNow.Ticks);
+        /// <value>The current time in ticks as an <see cref="Instant"/>.</value>
+        [Obsolete("Use the GetCurrentInstant() extension method for compatibility with 2.0")]
+        public Instant Now { get { return NodaConstants.BclEpoch.PlusTicks(DateTime.UtcNow.Ticks); } }
     }
 }
