@@ -6,7 +6,6 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsPackable>True</IsPackable>
     <PackageTags>nodatime;testing</PackageTags>
-    <PackageId>NodaTime.Testing.ExtendedSupport</PackageId>
 
   </PropertyGroup>
 
